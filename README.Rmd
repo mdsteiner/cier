@@ -1,0 +1,27 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file. -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# cier
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+`cier` detects careless and insufficient-effort responding (C/IER) in survey
+data using indirect, response-pattern indices from Goldammer et al. (2024). It
+favours a small, validated set of indices and an auditable,
+false-positive-rate-controlled flagging layer over a large method count.
+
+This package is under active development; the public interface is not yet
+stable.

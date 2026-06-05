@@ -1,0 +1,13 @@
+^archive$
+^dev$
+^CLAUDE\.md$
+^\.lintr$
+^\.github$
+^README\.Rmd$
+^LICENSE\.md$
+^ADR\.md$
+^\.Rproj\.user$
+^.*\.Rproj$
+^\.git$
+^\.gitignore$
+^\.gitattributes$

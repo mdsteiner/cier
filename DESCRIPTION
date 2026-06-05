@@ -1,0 +1,24 @@
+Package: cier
+Title: Detect Careless and Insufficient Effort Responding in Survey Data
+Version: 0.0.0.9000
+Authors@R:
+    person("Markus", "Steiner", , "markus.d.steiner@gmail.com",
+           role = c("aut", "cre", "cph"))
+Description: A lean, fast toolkit for detecting careless and insufficient
+    effort responding ('C/IER') in survey data using indirect
+    response-pattern indices (longstring, intra-individual response
+    variability, personal reliability, psychometric synonyms and antonyms,
+    Mahalanobis distance, person-total correlation, and nonparametric
+    person-fit statistics), following the indirect-index battery evaluated
+    by Goldammer et al. (2024) <doi:10.3758/s13428-024-02484-3>. Flags
+    respondents through an auditable, false-positive-rate-controlled layer
+    with transparent, citable defaults.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-US
+Depends:
+    R (>= 4.1)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
