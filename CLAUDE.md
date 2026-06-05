@@ -29,14 +29,27 @@ One production implementation per statistic (single-kernel rule). Alternative /
 paper re-derivations live only in `tests/reference/`. No statistical logic in
 wrappers, formatters, or plotters.
 
-## Build a method oracle-first (and stop for sign-off)
+## Build a method test-first (and stop for sign-off)
 
 Anything numerically delicate — an index, a cutoff, a tolerance, an ordinal
-correlation, an object schema — stops for Markus: write the paper reference
-oracle and cite the value, name the parity package + tolerance, show the
-recovery / parity delta, and get a go-ahead **before** writing the kernel. Then:
-kernel -> property / invariant tests -> thin wrapper -> commit. The reference
-value is the spec.
+correlation, an object schema — stops for Markus first: state the definition,
+cite the paper reference value, name the parity package + tolerance. Then build
+in this order:
+
+1. **Write the tests before the implementation** — the independent reference
+   oracle (re-derives the statistic by hand, never calls the production code),
+   the cross-package parity check at the recorded tolerance, the property /
+   invariant tests, and the edge / degenerate cases.
+2. **Adversarial test review (mandatory).** Run the `test-adversary` subagent on
+   the new tests against the feature spec. It mutation-probes the suite (would a
+   plausible-but-wrong implementation survive?). Close every surviving-mutant gap
+   it flags **before any implementation exists**.
+3. **Implement** the pure kernel, then the `<= 30`-line thin wrapper, until the
+   tests pass — no more.
+4. **Hand off for review.** Do NOT commit (see Conventions). Report the
+   reference / parity / recovery numbers as evidence.
+
+The reference value is the spec.
 
 ## Cutoffs (no ground truth)
 
@@ -64,7 +77,7 @@ and RPR are one construct — never count them as independent votes.
 (0 new) · coverage >= 90% on changed files · report the reference / recovery
 numbers. Tier tests: fast unit + oracle / parity (no skip) vs slow
 (`skip_on_cran()` + `skip_if_slow()`). Per edit run only the affected file; run
-the full fast tier pre-commit; `check()` pre-PR.
+the full fast tier + `check()` before each hand-off for review (no PRs in pre-release).
 
 ## Conventions
 
@@ -78,16 +91,23 @@ the full fast tier pre-commit; `check()` pre-PR.
   it plainly in place. A precise grep guard scans the packaged tree (the domain
   term "decision rule" is fine). `dev/` and `archive/` are `.Rbuildignore`d and
   exempt.
-- One logical change per commit (Conventional Commits). No scratch files in the
-  repo; `ADR.md` + `NEWS.md` are the durable record. Size budget: file <= 500,
-  function <= 80, public wrapper <= 30. No `:::`, no `<<-`, no `library()` /
-  `require()` in package code.
+- **Never `git commit` or push.** Markus reviews and commits. Keep each change to
+  one logical unit so a review maps to one commit, and suggest a
+  Conventional-Commit message for him. `ADR.md` + `NEWS.md` are the durable
+  record; no scratch files in the repo.
+- **Work directly on `main`** — no feature branches or PRs during this pre-release.
+  Hand off the working tree for review; Markus commits on `main`.
+- Size budget: file <= 500, function <= 80, public wrapper <= 30. No `:::`, no
+  `<<-`, no `library()` / `require()` in package code.
 - Windows environment; use PowerShell for shell commands.
 
 ## Where things live
 
-- `dev/restart/` — the design dossier that motivated this build (review,
-  research, plan). Dev-only, `.Rbuildignore`d, **not** a user reference; binding
-  facts graduate into `ADR.md` / the docs in plain terms.
+- **The build plan is `dev/restart/04-implementation-plan.md`** — the ordered
+  sequence to implement, with `05-architecture.md`, `06-index-specs.md`, and
+  `07-example-data.md` as references. Start there each session.
+- `dev/restart/00-03` — the design dossier (review, research, decisions) behind
+  this build. Dev-only, `.Rbuildignore`d, **not** a user reference; binding facts
+  graduate into `ADR.md` / the docs in plain terms.
 - `archive/` — the previous exploratory version, kept on disk for porting
   validated kernels and reference oracles. `.gitignore`d + `.Rbuildignore`d.

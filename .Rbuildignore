@@ -1,6 +1,7 @@
 ^archive$
 ^dev$
 ^CLAUDE\.md$
+^\.claude$
 ^\.lintr$
 ^\.github$
 ^README\.Rmd$

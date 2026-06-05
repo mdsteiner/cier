@@ -23,3 +23,6 @@ src/*.dll
 
 # archived previous version (reference only)
 /archive/
+
+# local-only Claude Code settings (the agents/ definitions ARE tracked)
+.claude/settings.local.json
