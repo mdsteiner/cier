@@ -28,6 +28,51 @@ distance; a Monte-Carlo null for the person-fit statistics). Fixed absolute
 heuristics are not used as defaults. Detection relies on agreement across
 indices rather than any single threshold.
 
+## Cutoff resolution: one path, a single direction flip
+
+All cutoffs resolve through one function, `resolve_cutoff()`, which branches on
+the registry's `default_cutoff_method`: `percentile` (an empirical quantile at a
+target false-positive rate `fpr`, default 0.05), `chisq` (`qchisq(1 - alpha, df)`
+for Mahalanobis distance, `alpha` = 0.001), and `fixed` (the longstring count,
+resolved as `ceiling(0.5 * ncol)` in that wrapper and passed through verbatim).
+
+The percentile method applies the direction flip **exactly once**: `upper` flags
+the high tail (the `1 - fpr` quantile), `lower` flags the low tail (the `fpr`
+quantile). The registry stores each method's *literal directional quantile*
+(`cier_irv` 0.05/lower, `cier_even_odd` 0.95/upper); that stored value is the
+documented result of `(fpr = 0.05, the row's flag direction)`, never an input
+that is flipped again. This is the deliberate fix for the v1 footgun where a
+stored directional quantile was re-flipped via `1 - p` and landed on the wrong
+tail. A single `fpr` knob therefore means the same target tail mass for every
+index, which is what lets the analyst sweep `fpr` across {0.01, 0.05, 0.10}. The
+flag comparator (`>=` / `<=`) is applied separately, by `apply_flag()`.
+
+`resolve_cutoff()` returns a bare numeric scalar (`NA_real_`, with a typed
+`cier_warning_insufficient_items`, when a percentile cutoff cannot be resolved
+because no finite values remain). It builds no object: the index wrapper already
+knows its method and direction from its registry row and attaches them to the
+light `cier_index`.
+
+## Agreement diagnostic: observed co-occurrence vs a Poisson-binomial null
+
+Because an empirical-percentile cutoff flags its target rate by construction, the
+per-index flag rate is tautological and is never presented as a false-positive
+rate. The informative quantity is cross-index agreement: `flag_agreement()`
+reports, for each level k, the observed share of respondents flagged by at least
+k votes against the share expected if the votes fired independently. That
+expectation is the exact upper tail of the **Poisson-binomial** distribution of
+the per-vote flag rates (a sum of independent Bernoullis with *unequal*
+probabilities — the correct null when, say, Mahalanobis flags ~0.1% and IRV ~5%;
+a plain binomial assuming one shared rate would be wrong). Observed far above
+expected makes a clustered careless subgroup visible. This is a descriptive
+visibility diagnostic, not a calibrated test: the baseline is a null of "no
+shared signal", not a claim the indices are independent (they are not, which is
+why even-odd, PR, and RPR collapse to one vote upstream). A companion per-vote
+table additionally reports each vote's excess over a supplied calibrated null;
+that excess is informative only for the null-referenced indices (Mahalanobis
+chi-square, the person-fit Monte-Carlo nulls) and is marked tautological (NA)
+for the empirical-percentile votes.
+
 ## Architecture: function-first indices
 
 Each index is a documented function on a response matrix (a data.frame or

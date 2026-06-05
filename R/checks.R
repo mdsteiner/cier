@@ -16,3 +16,30 @@ check_string <- function(x, arg, call = rlang::caller_env()) {
   }
   invisible(x)
 }
+
+check_choice <- function(x, arg, choices, call = rlang::caller_env()) {
+  if (!is.character(x) || length(x) != 1L || is.na(x) || !(x %in% choices)) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be one of {.val {choices}}.",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
+
+is_number_in_range <- function(x, lower, upper) {
+  is.numeric(x) && length(x) == 1L && is.finite(x) && x >= lower && x <= upper
+}
+
+check_number <- function(x, arg, lower = -Inf, upper = Inf,
+                         call = rlang::caller_env()) {
+  if (!is_number_in_range(x, lower, upper)) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single finite number in [{lower}, {upper}].",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
