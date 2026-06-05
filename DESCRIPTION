@@ -17,8 +17,15 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-US
 Depends:
-    R (>= 4.1)
+    R (>= 4.4)
+Imports:
+    cli,
+    rlang,
+    utils
 Suggests:
+    callr,
+    roxygen2,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0

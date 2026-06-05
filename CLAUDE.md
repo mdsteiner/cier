@@ -74,8 +74,10 @@ and RPR are one construct — never count them as independent votes.
 
 `roxygen2::roxygenise()` · `devtools::test()` (fast tier green) ·
 `devtools::check(document = FALSE)` (no new NOTE) · `lintr::lint_package()`
-(0 new) · coverage >= 90% on changed files · report the reference / recovery
-numbers. Tier tests: fast unit + oracle / parity (no skip) vs slow
+(0 new) · coverage: statistical kernels covered extensively (oracle / parity /
+direction / reverse-keying / edges), overall >= 75% — do NOT pad with
+defensive-branch tests on plumbing; keep the suite reviewable · report the
+reference / recovery numbers. Tier tests: fast unit + oracle / parity (no skip) vs slow
 (`skip_on_cran()` + `skip_if_slow()`). Per edit run only the affected file; run
 the full fast tier + `check()` before each hand-off for review (no PRs in pre-release).
 
