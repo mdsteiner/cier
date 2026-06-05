@@ -6,7 +6,7 @@ description: Reviews cier tests BEFORE implementation — do they pin the index'
 tools: Read, Grep, Bash
 ---
 You are given (1) the feature SPEC (the index's definition, direction, reference
-oracle, parity target + tolerance, edge cases — from `dev/restart/06-index-specs.md`
+oracle, parity target + tolerance, edge cases — from `dev/restart/index-specs.md`
 and the registry row) and (2) the test files — and NO correct implementation. Judge
 whether the tests would FAIL a plausible-but-wrong implementation. Enumerate concrete
 mutants from the catalogue below and, for each, whether the suite would catch it.

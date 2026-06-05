@@ -97,17 +97,18 @@ the full fast tier + `check()` before each hand-off for review (no PRs in pre-re
   record; no scratch files in the repo.
 - **Work directly on `main`** — no feature branches or PRs during this pre-release.
   Hand off the working tree for review; Markus commits on `main`.
-- Size budget: file <= 500, function <= 80, public wrapper <= 30. No `:::`, no
+- Size budget: file <= 500, function <= 80, public wrapper <= 30; lintr
+  `cyclocomp <= 20`, `object_length <= 40`, `line_length <= 100`. No `:::`, no
   `<<-`, no `library()` / `require()` in package code.
 - Windows environment; use PowerShell for shell commands.
 
 ## Where things live
 
-- **The build plan is `dev/restart/04-implementation-plan.md`** — the ordered
-  sequence to implement, with `05-architecture.md`, `06-index-specs.md`, and
-  `07-example-data.md` as references. Start there each session.
-- `dev/restart/00-03` — the design dossier (review, research, decisions) behind
-  this build. Dev-only, `.Rbuildignore`d, **not** a user reference; binding facts
-  graduate into `ADR.md` / the docs in plain terms.
+- **The build plan is `dev/restart/plan.md`** — the ordered sequence to implement,
+  with `architecture.md`, `index-specs.md`, and `example-data.md` as references.
+  Start there each session.
+- `archive/dev/restart/` holds the original rationale (review, research, plan) if
+  the "why" is ever needed. Dev-only, `.Rbuildignore`d, **not** a user reference;
+  binding facts graduate into `ADR.md` / the docs in plain terms.
 - `archive/` — the previous exploratory version, kept on disk for porting
   validated kernels and reference oracles. `.gitignore`d + `.Rbuildignore`d.
