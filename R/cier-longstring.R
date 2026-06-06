@@ -1,0 +1,77 @@
+# Purpose: cier_longstring() -- the public maximum-run-length C/IER index.
+# Args:    See documentation below.
+# Returns: A light `cier_index` (see new_cier_index()).
+# Invariants:
+#   - Bytewise compatible with careless::longstring() on present data.
+#   - The cutoff routes through the single resolve_cutoff() path (fixed method,
+#     fraction-or-count interpreted there via n_items).
+
+#' Longest-run-length C/IER index
+#'
+#' Computes the **maximum** run length of consecutive identical responses for
+#' every respondent — the canonical longstring statistic of Johnson (2005) and
+#' Meade & Craig (2012). Long runs flag straightlining. The score is computed
+#' over the raw response row (no scale blocking).
+#'
+#' @details
+#' **Cutoff.** The default cutoff is `ceiling(0.5 * p)` where `p` is the number
+#' of items. The `cutoff` argument overrides it: a value in `(0, 1]` is
+#' interpreted as a **fraction** of the item count (`ceiling(cutoff * p)`); a
+#' value greater than `1` is an **absolute** run-length count. Note `cutoff = 1`
+#' is the fraction path (`ceiling(1 * p) = p`), not the literal count `1`.
+#' Respondents whose longest run is greater than or equal to the cutoff are
+#' flagged.
+#'
+#' **Abstention.** A respondent who answered nothing (an all-`NA` row) abstains:
+#' both `value` and `flagged` are `NA` and the row is excluded from the flag
+#' count and rate. (`careless::longstring()` returns `1` for such a row; `cier`
+#' reports it as missing rather than as the least-careless score.) The flag rate
+#' shown by `print()` is taken over respondents who produced a usable score.
+#'
+#' @section What this catches:
+#' Straightlining, midpoint responding, and extreme responding (when a careless
+#' respondent locks on one option). It is **not** useful against random
+#' responding, which produces short runs.
+#'
+#' @param responses A numeric matrix (or a data.frame / tibble coerced
+#'   internally) of responses, one row per respondent and one column per item.
+#'   `NA` marks a missing response.
+#' @param cutoff Optional cutoff. `NULL` (default) uses the registry default
+#'   `ceiling(0.5 * p)`. A finite number in `(0, 1]` is a fraction of the item
+#'   count; a finite number `> 1` (and `<= p`) is an absolute run-length count.
+#'
+#' @return A `cier_index`: a list with per-respondent `value` (numeric, `NA` on
+#'   abstention) and `flagged` (logical) vectors plus the `method`, `cutoff`, and
+#'   `direction` metadata. Use [as.data.frame()][as.data.frame.cier_index] for a
+#'   tidy data frame and `print()` for a summary.
+#'
+#' @references
+#' Johnson, J. A. (2005). Ascertaining the validity of individual protocols from
+#' web-based personality inventories. *Journal of Research in Personality*,
+#' 39(1), 103–129. \doi{10.1016/j.jrp.2004.09.009}
+#'
+#' Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey
+#' data. *Psychological Methods*, 17(3), 437–455. \doi{10.1037/a0028085}
+#'
+#' @seealso [careless::longstring()]
+#' @family indirect indices
+#' @export
+#' @examples
+#' # The 44 BFI items are the first 44 columns of the bundled example data.
+#' out <- cier_longstring(bfi_careless[, 1:44])
+#' out
+#' head(as.data.frame(out))
+cier_longstring <- function(responses, cutoff = NULL) {
+  call <- rlang::caller_env()
+  responses <- check_responses(responses, call = call)
+  p <- ncol(responses)
+  row <- cier_method_row("cier_longstring")
+  value <- kernel_longstring(responses)
+  value[rowSums(!is.na(responses)) == 0L] <- NA_real_   # abstain on all-NA rows
+  cutoff_value <- resolve_cutoff(
+    method = "fixed", n_items = p, call = call,
+    value = if (is.null(cutoff)) row$default_cutoff_value else cutoff
+  )
+  flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
+  new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
+}

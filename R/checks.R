@@ -43,3 +43,43 @@ check_number <- function(x, arg, lower = -Inf, upper = Inf,
   }
   invisible(x)
 }
+
+# Coerce a user response payload to a validated numeric matrix. A data.frame or
+# tibble is accepted and coerced (so users never call as.matrix()); `NA` is the
+# only allowed missing marker -- NaN and infinities are rejected. This is the
+# function-first input contract shared by every index wrapper.
+check_responses <- function(responses, arg = "responses",
+                            call = rlang::caller_env()) {
+  if (!is.matrix(responses) && !is.data.frame(responses)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be a matrix or data.frame (one row per respondent).",
+        "x" = "Got {.cls {class(responses)}}; a bare vector or array is rejected."),
+      data = list(arg = arg), call = call
+    )
+  }
+  m <- as.matrix(responses)
+  if (!is.numeric(m)) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be numeric (a matrix or data.frame of numbers).",
+      data = list(arg = arg), call = call
+    )
+  }
+  if (nrow(m) == 0L || ncol(m) == 0L) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must have at least one row and one column.",
+      data = list(arg = arg, nrow = nrow(m), ncol = ncol(m)), call = call
+    )
+  }
+  if (any(is.nan(m) | is.infinite(m))) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} may contain only finite numbers or {.val NA}.",
+        "x" = "Found {.val NaN} or infinite values."),
+      data = list(arg = arg), call = call
+    )
+  }
+  m
+}

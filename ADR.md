@@ -81,17 +81,47 @@ tibble is accepted and coerced internally, so users need not call
 that need item metadata (even-odd, personal reliability, Gnormed, Ht) take a
 single optional `items` data.frame with columns `scale`, `reverse_keyed`, and
 `categories` (one row per item); the other six need only the responses. An index
-returns a light `cier_index` — a `data.frame(value, flagged)` carrying its
-method, cutoff, and flag direction as attributes, with a print method.
-`cier_screen()` is a thin orchestrator that runs the selected indices and
-returns a per-respondent flag table plus the count of flagged *constructs*
-(even-odd and personal reliability collapse to one vote). There is deliberately
-no `cier_data` / `cier_items` input class and no separate constructor/validator
-layer: the matrix-plus-metadata convention matches the parity packages
-(`careless`, `PerFit`, `mokken`), keeps the surface small, and pushes validation
-to small per-function input checks. Cross-cutting concerns stay shared and are
-the only retained foundation: typed conditions, the method-properties registry,
-and one cutoff resolver.
+returns a light `cier_index` — a list-based S3 object (see "Object schema:
+list-based `cier_index`" below) — assembled by one shared `new_cier_index()`
+constructor. `cier_screen()` is a thin orchestrator that runs the selected
+indices and returns a per-respondent flag table plus the count of flagged
+*constructs* (even-odd and personal reliability collapse to one vote). There is
+deliberately no `cier_data` / `cier_items` input class and no per-method or
+heavy `validate_` layer: the matrix-plus-metadata convention keeps the surface
+small and pushes validation to small per-function input checks. Cross-cutting
+concerns stay shared and are the only retained foundation: typed conditions, the
+method-properties registry, one cutoff resolver, and the one `cier_index`
+constructor.
+
+## Object schema: list-based `cier_index`
+
+A `cier_index` is a list-based S3 object —
+`structure(list(value, flagged, method, cutoff, direction), class = "cier_index")`
+— not a `data.frame` carrying the metadata as attributes. Per-respondent `value`
+and `flagged` are vectors (`NA` where the index abstains); the flag count and
+rate are derived on `print` from `flagged` and are never stored, so they cannot
+desynchronise from the data. One shared `new_cier_index()` is the single schema
+definition for all indices and enforces the universal rule that `flagged` is
+`NA` wherever `value` is `NA`. An `as.data.frame()` method returns the tidy
+`data.frame(value, flagged)` for downstream analysis.
+
+The list shape was chosen over data.frame-plus-attributes on the evidence that
+custom attributes on a user-facing data.frame are silently dropped by
+tidyverse/base operations and survive (stale) across row-subsetting — a real
+defect for a research tool whose users pipe per-respondent scores (a subset
+printed e.g. "2 of 1 respondent (200%)"). A list keeps the metadata robust and
+discoverable (`out$method` works), is the canonical S3 record shape, and matches
+the objects returned by `PerFit` / `mokken` and the prior version of the
+package. `cier_screen()` (slice 12) follows the same robust shape.
+
+## Cutoff: fraction-or-count lives in the one resolver
+
+The fraction-or-count interpretation of a `fixed` cutoff (a value in `(0, 1]` is
+a fraction of the item count; a value `> 1` is an absolute count) lives in
+`resolve_cutoff()` itself, gated by an `n_items` argument — not in a per-index
+wrapper helper. This keeps the one-cutoff-path rule literally true: every cutoff,
+default or user-supplied, is resolved in the single resolver, and index wrappers
+contain no cutoff arithmetic.
 
 ## Method-properties registry schema
 

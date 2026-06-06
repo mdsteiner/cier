@@ -15,6 +15,7 @@ Description: A lean, fast toolkit for detecting careless and insufficient
     with transparent, citable defaults.
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
 Language: en-US
 Depends:
     R (>= 4.4)
@@ -25,6 +26,7 @@ Imports:
     utils
 Suggests:
     callr,
+    careless,
     roxygen2,
     testthat (>= 3.0.0),
     withr

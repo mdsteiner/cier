@@ -27,7 +27,8 @@ test_that("man/ and NAMESPACE are up to date with roxygen2", {
   tmp <- tempfile("cier-roxy-")
   dir.create(tmp)
   on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
-  for (item in c("DESCRIPTION", "NAMESPACE", "R", "man", "inst")) {
+  # `data` is needed so roxygen can resolve the bundled-dataset documentation.
+  for (item in c("DESCRIPTION", "NAMESPACE", "R", "man", "inst", "data")) {
     src <- file.path(root, item)
     if (file.exists(src)) {
       file.copy(src, tmp, recursive = TRUE)

@@ -1,5 +1,6 @@
 ^archive$
 ^dev$
+^data-raw$
 ^CLAUDE\.md$
 ^\.claude$
 ^\.lintr$

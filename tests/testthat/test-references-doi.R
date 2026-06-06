@@ -3,6 +3,16 @@
 # documented sources and the registry's single source of citation truth in
 # lock-step as index wrappers add @references. (DOI-less references, e.g.
 # classic pre-DOI papers, are not constrained.)
+#
+# Data-documentation pages (\docType{data}) are exempt: they cite the source of
+# a bundled dataset, which is a data provenance reference, not a method citation,
+# and so is recorded in LICENSE.note / the data page rather than the registry.
+
+# TRUE when an Rd file documents a dataset (cites a data source, not a method).
+is_data_doc <- function(rd_file) {
+  lines <- readLines(rd_file, warn = FALSE, encoding = "UTF-8")
+  any(grepl("\\\\docType\\{data\\}", lines))
+}
 
 # Extract the lines of every \references{...} block from one Rd file's
 # lines, brace-matched so multi-line blocks are captured in full.
@@ -39,6 +49,7 @@ test_that("every @references DOI resolves to a registry citation entry", {
   man_dir <- file.path(cier_pkg_root(), "man")
   skip_if(!dir.exists(man_dir), "man/ not on disk")
   rd <- list.files(man_dir, pattern = "\\.Rd$", full.names = TRUE)
+  rd <- Filter(function(f) !is_data_doc(f), rd)
   skip_if(length(rd) == 0L, "no man pages on disk")
 
   cited <- unique(unlist(lapply(rd, dois_in_references)))

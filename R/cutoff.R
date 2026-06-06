@@ -43,6 +43,37 @@ resolve_percentile_cutoff <- function(values, direction, fpr, call) {
   as.numeric(stats::quantile(finite, probs = probs, names = FALSE, type = 7L))
 }
 
+# Resolve a fixed cutoff that may be expressed as a fraction of the item count.
+# With `n_items` supplied, a finite scalar in (0, 1] is a fraction of the item
+# count (`ceiling(value * n_items)`, so `1` resolves to all items) and a scalar
+# > 1 is an absolute count (passed through literally, including non-integers);
+# `<= 0` or `> n_items` abort. Reuses check_number for the single-finite-scalar
+# guard so the diagnostics match the rest of the package. The longstring default
+# 0.5 and any user `cutoff` both flow through here.
+resolve_fixed_cutoff <- function(value, n_items, call) {
+  if (is.null(n_items)) {
+    return(as.numeric(value))
+  }
+  check_number(value, "cutoff", call = call)
+  if (value <= 0) {
+    cier_abort("cier_error_input", "{.arg cutoff} must be positive.",
+               data = list(arg = "cutoff", observed = value), call = call)
+  }
+  if (value <= 1) {
+    return(ceiling(value * n_items))
+  }
+  if (value > n_items) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg cutoff} cannot exceed the number of items.",
+        "x" = "Got {value}; the data has {n_items} item{?s}."),
+      data = list(arg = "cutoff", observed = value, expected = n_items),
+      call = call
+    )
+  }
+  as.numeric(value)
+}
+
 # Purpose: Resolve a flagging cutoff from per-respondent index values.
 # Args:
 #   values    - numeric vector of index values (NA / NaN / Inf dropped before
@@ -54,14 +85,16 @@ resolve_percentile_cutoff <- function(values, direction, fpr, call) {
 #               lie in the open interval (0, 1).
 #   df        - chi-square degrees of freedom (required when method = "chisq").
 #   alpha     - chi-square upper-tail probability (default 0.001).
-#   value     - the already-resolved cutoff for method = "fixed" (e.g. the
-#               longstring wrapper's ceiling(0.5 * ncol)).
+#   value     - the cutoff for method = "fixed" (a literal count, or a
+#               fraction-or-count when `n_items` is supplied).
+#   n_items   - number of items; when supplied, `value` is interpreted as a
+#               fraction-of-items-or-absolute-count for method = "fixed".
 #   call      - calling environment for typed conditions.
 # Returns: a numeric scalar cutoff; NA_real_ when the percentile method abstains.
 resolve_cutoff <- function(values = NULL, direction = "upper",
                            method = "percentile", fpr = 0.05,
                            df = NULL, alpha = 0.001, value = NULL,
-                           call = rlang::caller_env()) {
+                           n_items = NULL, call = rlang::caller_env()) {
   check_choice(method, "method", cier_cutoff_methods(), call = call)
   if (identical(method, "fixed")) {
     if (is.null(value)) {
@@ -69,7 +102,7 @@ resolve_cutoff <- function(values = NULL, direction = "upper",
                  "{.arg value} is required for the fixed cutoff method.",
                  data = list(arg = "value"), call = call)
     }
-    return(as.numeric(value))
+    return(resolve_fixed_cutoff(value, n_items, call))
   }
   if (identical(method, "chisq")) {
     if (is.null(df)) {

@@ -19,6 +19,18 @@ slices (2-11).
 | Fixed cutoff (verbatim passthrough of the resolved value) | 0 (identical) | -- |
 | Agreement diagnostic Poisson-binomial tail vs. enumeration oracle | 1e-12 | `ref-poisson-binomial-enumeration.R` |
 
+## Per-index parity (slices 2-11)
+
+One row per statistic, added when its slice lands. Each index has an independent
+definition oracle (re-derives the statistic by hand, never calls the production
+kernel) and, where a partner package computes the same quantity, a cross-package
+parity check.
+
+| Index | Quantity | Target tolerance | Reference |
+|---|---|---:|---|
+| longstring | max run length vs. independent oracle (`ref_longstring$longest`) | 0 (exact) | `ref-longstring-johnson2005.R` |
+| longstring | vs. `careless::longstring()` on complete data | 0 (bytewise) | `careless` (1.2.2) |
+
 ## How to use this table
 
 - Tests in `tests/testthat/test-cutoff.R` / `test-diagnostics.R` assert these
