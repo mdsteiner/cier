@@ -62,14 +62,11 @@ test_that("chisq cutoff equals qchisq(1 - alpha, df)", {
                    as.numeric(stats::qchisq(1 - 0.01, df = 10)))
 })
 
-test_that("chisq without df is a typed input error", {
-  expect_error(resolve_cutoff(method = "chisq"), class = "cier_error_input")
-})
-
-test_that("chisq with a non-positive or non-numeric df is a typed input error", {
-  expect_error(resolve_cutoff(method = "chisq", df = 0), class = "cier_error_input")
-  expect_error(resolve_cutoff(method = "chisq", df = "x"), class = "cier_error_input")
-})
+# Note: resolve_cutoff() is an internal resolver that trusts its inputs (df,
+# alpha, method, direction, fpr). The public wrappers validate the user-supplied
+# rate / cutoff before calling -- e.g. cier_irv() rejects fpr outside (0, 1) and
+# cier_mahalanobis() rejects alpha outside (0, 1) -- so those input-error cases
+# are tested at the wrapper level, not here.
 
 # ---- resolve_cutoff: fixed ---------------------------------------------------
 
@@ -96,10 +93,6 @@ test_that("the fraction path is robust to floating-point error (no ceiling bump)
   expect_identical(resolve_cutoff(method = "fixed", value = 0.21, n_items = 25), 6)
 })
 
-test_that("fixed without value is a typed input error", {
-  expect_error(resolve_cutoff(method = "fixed"), class = "cier_error_input")
-})
-
 # ---- resolve_cutoff: abstention + edges -------------------------------------
 
 test_that("percentile abstains (NA + typed warning) when no finite values", {
@@ -124,20 +117,6 @@ test_that("percentile drops NaN/Inf before the quantile", {
 test_that("percentile handles a single finite value and constant input", {
   expect_identical(resolve_cutoff(c(5, NA), "lower", fpr = 0.05), 5)
   expect_identical(resolve_cutoff(rep(7, 10L), "upper", fpr = 0.05), 7)
-})
-
-test_that("invalid method or direction is a typed input error", {
-  expect_error(resolve_cutoff(1:10, method = "kneedle"), class = "cier_error_input")
-  expect_error(resolve_cutoff(1:10, direction = "sideways"), class = "cier_error_input")
-})
-
-test_that("fpr outside the open interval (0, 1) is a typed input error", {
-  # A target false-positive rate of 0% or 100% is meaningless, as are values
-  # outside [0, 1]; reject the whole closed boundary and beyond.
-  expect_error(resolve_cutoff(1:10, fpr = 1.5), class = "cier_error_input")
-  expect_error(resolve_cutoff(1:10, fpr = 1), class = "cier_error_input")
-  expect_error(resolve_cutoff(1:10, fpr = 0), class = "cier_error_input")
-  expect_error(resolve_cutoff(1:10, fpr = -0.1), class = "cier_error_input")
 })
 
 # ---- apply_flag --------------------------------------------------------------

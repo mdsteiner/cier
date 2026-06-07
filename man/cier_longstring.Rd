@@ -69,6 +69,7 @@ data. \emph{Psychological Methods}, 17(3), 437–455. \doi{10.1037/a0028085}
 \code{\link[careless:longstring]{careless::longstring()}}
 
 Other indirect indices:
-\code{\link[=cier_irv]{cier_irv()}}
+\code{\link[=cier_irv]{cier_irv()}},
+\code{\link[=cier_mahalanobis]{cier_mahalanobis()}}
 }
 \concept{indirect indices}

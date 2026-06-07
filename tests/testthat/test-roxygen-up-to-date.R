@@ -6,6 +6,11 @@
 
 test_that("man/ and NAMESPACE are up to date with roxygen2", {
   skip_on_cran()
+  # covr instruments an installed copy whose R/ holds no source, so regenerating
+  # roxygen there yields an empty NAMESPACE -- the comparison is meaningless under
+  # coverage instrumentation (the regular test run still enforces it).
+  skip_if(identical(Sys.getenv("R_COVR"), "true"),
+          "roxygen regeneration is unreliable under covr instrumentation")
   skip_if_not_installed("roxygen2")
   skip_if_not_installed("callr")
   skip_if_no_description()

@@ -66,21 +66,24 @@ cier_longstring <- function(responses, frac = NULL, cutoff = NULL) {
   call <- rlang::caller_env()
   responses <- check_responses(responses, call = call)
   p <- ncol(responses)
-  # `frac` is a fraction of the item count in (0, 1]; `cutoff` is a literal
-  # run-length count in [1, p]. Validate each supplied override up front.
+  # Validate every input up front so a bad argument fails before the kernel runs.
+  # `frac` is a fraction of the item count in (0, 1]; a literal `cutoff` is a
+  # run-length count in [1, p]; the two overrides are mutually exclusive.
   if (!is.null(frac)) check_fraction(frac, "frac", call = call)
   if (!is.null(cutoff)) check_number(cutoff, "cutoff", lower = 1, upper = p,
                                      call = call)
+  assert_single_override(frac, "frac", cutoff, call = call)
   row <- cier_method_row("cier_longstring")
   value <- kernel_longstring(responses)
   value[rowSums(!is.na(responses)) == 0L] <- NA_real_   # abstain on all-NA rows
-  cutoff_value <- resolve_index_cutoff(
-    frac, "frac", cutoff, call = call,
-    rate_fn = function() {
-      f <- if (is.null(frac)) row$default_cutoff_value else frac
-      resolve_cutoff(method = "fixed", value = f, n_items = p, call = call)
-    }
-  )
+  # A literal cutoff passes through verbatim (already validated); otherwise the
+  # default is a fraction of the item count, ceiling(frac * p).
+  cutoff_value <- if (!is.null(cutoff)) {
+    cutoff
+  } else {
+    f <- if (is.null(frac)) row$default_cutoff_value else frac
+    resolve_cutoff(method = "fixed", value = f, n_items = p, call = call)
+  }
   flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
   new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
 }

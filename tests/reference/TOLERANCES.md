@@ -32,6 +32,10 @@ parity check.
 | longstring | vs. `careless::longstring()` on complete data | 0 (bytewise) | `careless` (1.2.2) |
 | irv | per-row sample SD vs. independent oracle (`ref_irv`) | 1e-10 | `ref-irv-marjanovic-2015.R` |
 | irv | vs. `careless::irv()` (incl. `na.rm` rows) | 1e-10 | `careless` (1.2.2) |
+| mahalanobis | per-row D² vs. independent oracle (`ref_mahalanobis`) | 1e-10 | `ref-mahalanobis-curran-2016.R` |
+| mahalanobis | exact hand-computed 2-column fixture (`c(2, 0, 2, 2)`) | 1e-12 | worked by hand |
+| mahalanobis | vs. `careless::mahad(flag = FALSE)` (incl. NA rows) | 1e-10 | `careless` (1.2.2) |
+| mahalanobis | vs. `psych::outlier()` D² (incl. NA rows) | 1e-10 | `psych` (2.6.5) |
 
 ## How to use this table
 

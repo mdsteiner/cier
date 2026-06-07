@@ -3,10 +3,15 @@
 #          per-respondent index values into one numeric cutoff; `apply_flag()`
 #          turns that cutoff into per-respondent logical flags. Pure math, no
 #          I/O and no registry read -- each index wrapper reads its own registry
-#          row and passes the method / direction / fpr it needs.
+#          row and passes the method / direction / rate it needs.
 # Args:    See per-function documentation below.
 # Returns: resolve_cutoff() -> numeric scalar; apply_flag() -> logical vector.
 # Invariants:
+#   - These are INTERNAL resolvers that TRUST their inputs. Every public index
+#     wrapper validates the user-supplied rate (`fpr` / `alpha` / `frac`) and
+#     literal `cutoff` before calling (early fail), and `method` / `direction`
+#     come from the registry, so no input re-checking happens here. The only
+#     condition raised below is the runtime percentile abstention.
 #   - The percentile branch flips on direction exactly ONCE (upper -> the
 #     1 - fpr quantile, lower -> the fpr quantile). The registry stores each
 #     method's literal directional quantile, so it must never be fed back
@@ -21,14 +26,6 @@
 # low tail (probs = fpr). Non-finite values are dropped first; with none left
 # the cutoff abstains (NA + typed warning) rather than erroring.
 resolve_percentile_cutoff <- function(values, direction, fpr, call) {
-  if (!is.numeric(fpr) || length(fpr) != 1L || is.na(fpr) ||
-        fpr <= 0 || fpr >= 1) {
-    cier_abort(
-      "cier_error_input",
-      "{.arg fpr} must be a single number in the open interval (0, 1).",
-      data = list(arg = "fpr", observed = fpr), call = call
-    )
-  }
   finite <- values[is.finite(values)]
   if (length(finite) == 0L) {
     cier_warn(
@@ -58,50 +55,37 @@ resolve_fixed_cutoff <- function(value, n_items) {
   ceiling(round(as.numeric(value) * n_items, 9L))
 }
 
-# Purpose: Resolve a flagging cutoff from per-respondent index values.
+# Purpose: Resolve a flagging cutoff from per-respondent index values. Internal
+#   resolver; it TRUSTS its inputs (the calling wrapper has validated the
+#   user-supplied rate / `cutoff`, and `method` / `direction` come from the
+#   registry), so it does no input checking -- it only does the math and signals
+#   the runtime percentile abstention.
 # Args:
 #   values    - numeric vector of index values (NA / NaN / Inf dropped before
 #               the percentile quantile); ignored for "fixed" / "chisq".
 #   direction - "upper" (flag the high tail) or "lower" (the low tail); used
 #               only by the percentile method's single flip.
 #   method    - "percentile" (default), "fixed", or "chisq".
-#   fpr       - false-positive tail mass for "percentile" (default 0.05); must
-#               lie in the open interval (0, 1).
-#   df        - chi-square degrees of freedom (required when method = "chisq").
+#   fpr       - false-positive tail mass for "percentile" (default 0.05).
+#   df        - chi-square degrees of freedom (method = "chisq").
 #   alpha     - chi-square upper-tail probability (default 0.001).
-#   value     - the cutoff for method = "fixed": a literal threshold when
+#   value     - the cutoff value for method = "fixed": a literal threshold when
 #               `n_items` is NULL, or a fraction of the item count when
-#               `n_items` is supplied. Must be pre-validated by the caller (the
-#               wrapper or resolve_index_cutoff); the fixed arithmetic does no
-#               checking.
+#               `n_items` is supplied.
 #   n_items   - number of items; when supplied, `value` is a fraction of the
 #               item count (`ceiling(value * n_items)`) for method = "fixed".
-#   call      - calling environment for typed conditions.
+#   call      - calling environment for the abstention warning.
 # Returns: a numeric scalar cutoff; NA_real_ when the percentile method abstains.
 resolve_cutoff <- function(values = NULL, direction = "upper",
                            method = "percentile", fpr = 0.05,
                            df = NULL, alpha = 0.001, value = NULL,
                            n_items = NULL, call = rlang::caller_env()) {
-  check_choice(method, "method", cier_cutoff_methods(), call = call)
   if (identical(method, "fixed")) {
-    if (is.null(value)) {
-      cier_abort("cier_error_input",
-                 "{.arg value} is required for the fixed cutoff method.",
-                 data = list(arg = "value"), call = call)
-    }
     return(resolve_fixed_cutoff(value, n_items))
   }
   if (identical(method, "chisq")) {
-    if (is.null(df)) {
-      cier_abort("cier_error_input",
-                 "{.arg df} is required for the chi-square cutoff method.",
-                 data = list(arg = "df"), call = call)
-    }
-    check_number(df, "df", lower = 1, call = call)
-    check_number(alpha, "alpha", lower = 0, upper = 1, call = call)
     return(as.numeric(stats::qchisq(1 - alpha, df = df)))
   }
-  check_choice(direction, "direction", cier_flag_directions(), call = call)
   resolve_percentile_cutoff(values, direction, fpr, call)
 }
 
@@ -120,29 +104,4 @@ apply_flag <- function(values, cutoff, direction, call = rlang::caller_env()) {
   }
   comparator <- if (identical(direction, "upper")) `>=` else `<=`
   !is.na(values) & comparator(values, cutoff)
-}
-
-# Purpose: Resolve an index wrapper's flagging cutoff, honouring the
-#   mutually-exclusive rate-vs-literal override every index exposes. Keeps the
-#   rate-or-literal dispatch in one place so each index wrapper (and the eight
-#   still to come) does not re-derive it. The wrapper validates `rate` and
-#   `cutoff` (check_fraction / check_number) before calling; this helper only
-#   enforces the mutual exclusion and routes a literal cutoff through the single
-#   resolver.
-# Args:
-#   rate      - the index's rate knob (`fpr` / `alpha` / `frac`), or NULL.
-#   rate_name - its argument name, for the typed mutual-exclusion message.
-#   cutoff    - the literal-threshold knob (already validated), or NULL.
-#   rate_fn   - a no-argument closure that resolves the rate-based default when
-#               no literal `cutoff` is supplied (the index's own percentile /
-#               chi-square / fraction resolution).
-#   call      - calling environment for typed conditions.
-# Returns: a numeric scalar cutoff.
-resolve_index_cutoff <- function(rate, rate_name, cutoff, rate_fn,
-                                 call = rlang::caller_env()) {
-  assert_single_override(rate, rate_name, cutoff, call)
-  if (is.null(cutoff)) {
-    return(rate_fn())
-  }
-  resolve_cutoff(method = "fixed", value = cutoff, call = call)
 }
