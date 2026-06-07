@@ -59,7 +59,12 @@ print.cier_index <- function(x, ...) {
   dir_word   <- if (identical(x$direction, "upper")) "higher" else "lower"
   comparator <- if (identical(x$direction, "upper")) ">=" else "<="
   pct <- if (n_scored > 0L) sprintf("%.1f", 100 * n_flagged / n_scored) else "--"
-  cutoff <- x$cutoff
+  # Round for display only (percentile cutoffs are arbitrary-precision quantiles;
+  # integer fixed cutoffs are unchanged: signif(5, 3) == 5). The "~" marks a
+  # rounded display so the printed threshold never claims false precision against
+  # the exact cutoff that actually drives the flags.
+  cutoff <- signif(x$cutoff, 3)
+  mark <- if (!is.na(x$cutoff) && !isTRUE(all.equal(cutoff, x$cutoff))) "~" else ""
   lines <- cli::cli_format_method({
     cli::cli_rule(left = x$method)
     cli::cli_text("Direction: {x$direction} -- {dir_word} values flag carelessness.")
@@ -67,7 +72,7 @@ print.cier_index <- function(x, ...) {
       cli::cli_text("Cutoff: none (unresolved).")
     } else {
       cli::cli_text(
-        "Cutoff: {cutoff} -- respondents with value {comparator} {cutoff} are flagged."
+        "Cutoff: {mark}{cutoff} -- respondents with value {comparator} {mark}{cutoff} are flagged."
       )
     }
     cli::cli_text("Flagged: {n_flagged} of {n_scored} scored respondent{?s} ({pct}%).")

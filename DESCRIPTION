@@ -20,7 +20,9 @@ Language: en-US
 Depends:
     R (>= 4.4)
 Imports:
+    checkmate,
     cli,
+    matrixStats,
     rlang,
     stats,
     utils

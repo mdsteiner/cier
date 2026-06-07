@@ -1,4 +1,4 @@
-# Tests for cier_longstring() (Slice 2 — the first index).
+# Tests for cier_longstring().
 #
 # Trust model: the independent oracle (ref_longstring) re-derives the max-run
 # statistic with a hand-rolled loop and never calls the production kernel; the
@@ -189,16 +189,22 @@ test_that("direction is upper: high values flag, low values do not (flag-lower m
   expect_identical(cier_longstring(x)$flagged, c(TRUE, FALSE))
 })
 
-# ---- Cutoff: fraction-or-count override -------------------------------------
+# ---- Cutoff: frac (fraction) and cutoff (literal) overrides ------------------
 
-test_that("a fractional cutoff in (0, 1] is a fraction of item count", {
+test_that("frac is a fraction of the item count (ceiling)", {
   x <- matrix(rep(3, 10L), nrow = 1L)            # p = 10, value 10
-  expect_identical(cier_longstring(x, cutoff = 0.4)$cutoff, 4) # ceiling(4)
+  expect_identical(cier_longstring(x, frac = 0.4)$cutoff, 4)  # ceiling(0.4 * 10)
 })
 
-test_that("an integer cutoff > 1 is an absolute count that drives the flags (>=)", {
-  # GAP 1: drive the flag through the count path, not just the stored attribute.
-  # p = 10. Row A longest run 5 (flag at count 5), row B longest run 4 (no).
+test_that("frac is robust to floating-point error in ceiling(frac * p)", {
+  # 0.28 * 25 == 7.0000000000000009 in IEEE-754; the cutoff must be 7, not 8.
+  x <- matrix(rep(3, 25L), nrow = 1L)            # p = 25
+  expect_identical(cier_longstring(x, frac = 0.28)$cutoff, 7)
+})
+
+test_that("a literal cutoff drives the flags (>= ties)", {
+  # Drive the flag through the literal-count path, not just the stored value.
+  # p = 10. Row A longest run 5 (flag at cutoff 5), row B longest run 4 (no).
   x <- matrix(
     c(3, 3, 3, 3, 3, 1, 2, 3, 4, 5,
       3, 3, 3, 3, 1, 2, 3, 4, 5, 1),
@@ -209,8 +215,8 @@ test_that("an integer cutoff > 1 is an absolute count that drives the flags (>=)
   expect_identical(out$flagged, c(TRUE, FALSE))  # value 5 >= 5 flags (tie)
 })
 
-test_that("a count cutoff equal to p is accepted; p + 1 is rejected (boundary)", {
-  # GAP 3: pin the > p reject boundary exactly, not only the far-out 999.
+test_that("a literal cutoff equal to p is accepted; p + 1 is rejected (boundary)", {
+  # Pin the > p reject boundary exactly, not only the far-out 999.
   x <- matrix(rep(3, 10L), nrow = 1L)            # p = 10, value 10
   out <- cier_longstring(x, cutoff = 10)
   expect_identical(out$cutoff, 10)
@@ -218,9 +224,9 @@ test_that("a count cutoff equal to p is accepted; p + 1 is rejected (boundary)",
   expect_error(cier_longstring(x, cutoff = 11), class = "cier_error_input")
 })
 
-test_that("a non-integer count > 1 is used as the literal cutoff (>= semantics)", {
-  # GAP 4: contract pinned -- a count > 1 passes through literally (archive
-  # parity, no rounding); >= against integer run lengths means 5.5 flags >= 6.
+test_that("a non-integer literal cutoff is used verbatim (>= semantics)", {
+  # A literal cutoff passes through with no rounding; >= against integer run
+  # lengths means 5.5 flags a longest run of 6 but not 5.
   x <- matrix(
     c(3, 3, 3, 3, 3, 3, 1, 2, 3, 4,   # longest run 6
       3, 3, 3, 3, 3, 1, 2, 3, 4, 5),  # longest run 5
@@ -231,25 +237,54 @@ test_that("a non-integer count > 1 is used as the literal cutoff (>= semantics)"
   expect_identical(out$flagged, c(TRUE, FALSE)) # 6 >= 5.5; 5 < 5.5
 })
 
-test_that("cutoff = 1 is the fraction path (ceiling(1 * p) = p), not the count 1", {
+test_that("frac = 1 resolves to all items (ceiling(1 * p) = p)", {
   x <- matrix(
     c(rep(3, 10L),                       # value 10 == p -> flagged at cutoff p
       rep(c(1, 4), length.out = 10L)),   # value 1       -> not flagged
     nrow = 2L, byrow = TRUE
   )
-  out <- cier_longstring(x, cutoff = 1)
+  out <- cier_longstring(x, frac = 1)
   expect_identical(out$cutoff, 10)
   expect_identical(out$flagged, c(TRUE, FALSE))
+})
+
+test_that("cutoff = 1 is a literal count of one, distinct from frac = 1", {
+  # The disambiguation the split buys: cutoff is ALWAYS literal, so a count of 1
+  # flags every scored respondent (longest run >= 1), unlike frac = 1 (= p).
+  x <- matrix(
+    c(rep(3, 10L),                       # value 10
+      rep(c(1, 4), length.out = 10L)),   # value 1
+    nrow = 2L, byrow = TRUE
+  )
+  out <- cier_longstring(x, cutoff = 1)
+  expect_identical(out$cutoff, 1)
+  expect_identical(out$flagged, c(TRUE, TRUE))   # 10 >= 1 and 1 >= 1
 })
 
 test_that("invalid cutoff overrides are typed input errors", {
   x <- matrix(rep(3, 40L), nrow = 5L, ncol = 8L)  # p = 8
   expect_error(cier_longstring(x, cutoff = -1), class = "cier_error_input")
-  expect_error(cier_longstring(x, cutoff = 0), class = "cier_error_input")
+  expect_error(cier_longstring(x, cutoff = 0), class = "cier_error_input")   # < 1
   expect_error(cier_longstring(x, cutoff = NA_real_), class = "cier_error_input")
   expect_error(cier_longstring(x, cutoff = c(1, 2)), class = "cier_error_input")
   expect_error(cier_longstring(x, cutoff = 999), class = "cier_error_input") # > p
   expect_error(cier_longstring(x, cutoff = "x"), class = "cier_error_input")
+})
+
+test_that("invalid frac overrides are typed input errors", {
+  x <- matrix(rep(3, 40L), nrow = 5L, ncol = 8L)  # p = 8
+  expect_error(cier_longstring(x, frac = 0), class = "cier_error_input")    # not > 0
+  expect_error(cier_longstring(x, frac = -0.1), class = "cier_error_input")
+  expect_error(cier_longstring(x, frac = 1.5), class = "cier_error_input")  # > 1
+  expect_error(cier_longstring(x, frac = NA_real_), class = "cier_error_input")
+  expect_error(cier_longstring(x, frac = c(0.5, 0.5)), class = "cier_error_input")
+  expect_error(cier_longstring(x, frac = "x"), class = "cier_error_input")
+})
+
+test_that("supplying both frac and cutoff is a typed input error", {
+  x <- matrix(rep(3, 40L), nrow = 5L, ncol = 8L)
+  expect_error(cier_longstring(x, frac = 0.5, cutoff = 5),
+               class = "cier_error_input")
 })
 
 # ---- print snapshot (locked, design-first) ----------------------------------

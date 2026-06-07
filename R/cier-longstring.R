@@ -3,8 +3,8 @@
 # Returns: A light `cier_index` (see new_cier_index()).
 # Invariants:
 #   - Bytewise compatible with careless::longstring() on present data.
-#   - The cutoff routes through the single resolve_cutoff() path (fixed method,
-#     fraction-or-count interpreted there via n_items).
+#   - The cutoff routes through the single resolve_cutoff() path (fixed method):
+#     `frac` resolves a fraction of the item count, `cutoff` a literal count.
 
 #' Longest-run-length C/IER index
 #'
@@ -15,12 +15,11 @@
 #'
 #' @details
 #' **Cutoff.** The default cutoff is `ceiling(0.5 * p)` where `p` is the number
-#' of items. The `cutoff` argument overrides it: a value in `(0, 1]` is
-#' interpreted as a **fraction** of the item count (`ceiling(cutoff * p)`); a
-#' value greater than `1` is an **absolute** run-length count. Note `cutoff = 1`
-#' is the fraction path (`ceiling(1 * p) = p`), not the literal count `1`.
-#' Respondents whose longest run is greater than or equal to the cutoff are
-#' flagged.
+#' of items. Override it with **one** of two mutually exclusive arguments:
+#' `frac`, a fraction of the item count in `(0, 1]` (resolving to
+#' `ceiling(frac * p)`), or `cutoff`, a literal run-length count in `[1, p]`.
+#' Respondents whose longest run is greater than or equal to the resolved cutoff
+#' are flagged.
 #'
 #' **Abstention.** A respondent who answered nothing (an all-`NA` row) abstains:
 #' both `value` and `flagged` are `NA` and the row is excluded from the flag
@@ -36,9 +35,11 @@
 #' @param responses A numeric matrix (or a data.frame / tibble coerced
 #'   internally) of responses, one row per respondent and one column per item.
 #'   `NA` marks a missing response.
-#' @param cutoff Optional cutoff. `NULL` (default) uses the registry default
-#'   `ceiling(0.5 * p)`. A finite number in `(0, 1]` is a fraction of the item
-#'   count; a finite number `> 1` (and `<= p`) is an absolute run-length count.
+#' @param frac Optional cutoff as a **fraction** of the item count: a single
+#'   finite number in `(0, 1]`, resolving to `ceiling(frac * p)`. `NULL`
+#'   (default) uses the registry default `0.5`. Mutually exclusive with `cutoff`.
+#' @param cutoff Optional **literal** run-length cutoff: a single finite number
+#'   in `[1, p]`, used verbatim. Supplied instead of `frac`.
 #'
 #' @return A `cier_index`: a list with per-respondent `value` (numeric, `NA` on
 #'   abstention) and `flagged` (logical) vectors plus the `method`, `cutoff`, and
@@ -61,16 +62,24 @@
 #' out <- cier_longstring(bfi_careless[, 1:44])
 #' out
 #' head(as.data.frame(out))
-cier_longstring <- function(responses, cutoff = NULL) {
+cier_longstring <- function(responses, frac = NULL, cutoff = NULL) {
   call <- rlang::caller_env()
   responses <- check_responses(responses, call = call)
   p <- ncol(responses)
+  # `frac` is a fraction of the item count in (0, 1]; `cutoff` is a literal
+  # run-length count in [1, p]. Validate each supplied override up front.
+  if (!is.null(frac)) check_fraction(frac, "frac", call = call)
+  if (!is.null(cutoff)) check_number(cutoff, "cutoff", lower = 1, upper = p,
+                                     call = call)
   row <- cier_method_row("cier_longstring")
   value <- kernel_longstring(responses)
   value[rowSums(!is.na(responses)) == 0L] <- NA_real_   # abstain on all-NA rows
-  cutoff_value <- resolve_cutoff(
-    method = "fixed", n_items = p, call = call,
-    value = if (is.null(cutoff)) row$default_cutoff_value else cutoff
+  cutoff_value <- resolve_index_cutoff(
+    frac, "frac", cutoff, call = call,
+    rate_fn = function() {
+      f <- if (is.null(frac)) row$default_cutoff_value else frac
+      resolve_cutoff(method = "fixed", value = f, n_items = p, call = call)
+    }
   )
   flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
   new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)

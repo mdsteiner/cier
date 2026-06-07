@@ -30,6 +30,8 @@ parity check.
 |---|---|---:|---|
 | longstring | max run length vs. independent oracle (`ref_longstring$longest`) | 0 (exact) | `ref-longstring-johnson2005.R` |
 | longstring | vs. `careless::longstring()` on complete data | 0 (bytewise) | `careless` (1.2.2) |
+| irv | per-row sample SD vs. independent oracle (`ref_irv`) | 1e-10 | `ref-irv-marjanovic-2015.R` |
+| irv | vs. `careless::irv()` (incl. `na.rm` rows) | 1e-10 | `careless` (1.2.2) |
 
 ## How to use this table
 

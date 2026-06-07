@@ -20,8 +20,10 @@ expected_registry <- function() {
       "fixed", "percentile", "percentile", "percentile", "percentile",
       "percentile", "chisq", "percentile", "percentile", "percentile"
     ),
-    default_cutoff_value = c(0.5, 0.05, 0.95, 0.95, 0.05, 0.95, 0.001, 0.05,
-                             0.95, 0.05),
+    # Percentile rows store the false-positive tail mass (fpr) uniformly; the
+    # flag_direction picks the tail and resolve_cutoff applies the single flip.
+    default_cutoff_value = c(0.5, 0.05, 0.05, 0.05, 0.05, 0.05, 0.001, 0.05,
+                             0.05, 0.05),
     flag_direction = c("upper", "lower", "upper", "upper", "lower", "upper",
                        "upper", "lower", "upper", "lower"),
     backend = c(rep(NA_character_, 8L), "PerFit", "mokken"),

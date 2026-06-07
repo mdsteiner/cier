@@ -2,4 +2,5 @@
 
 S3method(as.data.frame,cier_index)
 S3method(print,cier_index)
+export(cier_irv)
 export(cier_longstring)

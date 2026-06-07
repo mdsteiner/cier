@@ -23,3 +23,18 @@ kernel_longstring <- function(responses) {
     numeric(1L)
   )
 }
+
+# ---- IRV (intra-individual response variability) ----------------------------
+
+# Per-respondent SAMPLE standard deviation (denominator n - 1) across the items
+# a respondent answered. `matrixStats::rowSds()` is the C-vectorised equivalent
+# of the original `apply(x, 1, stats::sd, na.rm = TRUE)`: it shares stats::sd's
+# NA semantics under `na.rm = TRUE`, so a row with fewer than two present values
+# yields NA (never NaN) and abstention falls out of the summary itself with no
+# extra guard (unlike longstring, whose all-NA row scores 1). Its summation
+# order differs from a hand-rolled two-pass formula at ulp level, so the
+# reference oracle and careless::irv() are held to 1e-10, not bytewise (see
+# tests/reference/TOLERANCES.md).
+kernel_irv <- function(responses) {
+  matrixStats::rowSds(responses, na.rm = TRUE)
+}

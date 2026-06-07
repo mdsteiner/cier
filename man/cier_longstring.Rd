@@ -4,16 +4,19 @@
 \alias{cier_longstring}
 \title{Longest-run-length C/IER index}
 \usage{
-cier_longstring(responses, cutoff = NULL)
+cier_longstring(responses, frac = NULL, cutoff = NULL)
 }
 \arguments{
 \item{responses}{A numeric matrix (or a data.frame / tibble coerced
 internally) of responses, one row per respondent and one column per item.
 \code{NA} marks a missing response.}
 
-\item{cutoff}{Optional cutoff. \code{NULL} (default) uses the registry default
-\code{ceiling(0.5 * p)}. A finite number in \verb{(0, 1]} is a fraction of the item
-count; a finite number \verb{> 1} (and \verb{<= p}) is an absolute run-length count.}
+\item{frac}{Optional cutoff as a \strong{fraction} of the item count: a single
+finite number in \verb{(0, 1]}, resolving to \code{ceiling(frac * p)}. \code{NULL}
+(default) uses the registry default \code{0.5}. Mutually exclusive with \code{cutoff}.}
+
+\item{cutoff}{Optional \strong{literal} run-length cutoff: a single finite number
+in \verb{[1, p]}, used verbatim. Supplied instead of \code{frac}.}
 }
 \value{
 A \code{cier_index}: a list with per-respondent \code{value} (numeric, \code{NA} on
@@ -25,17 +28,15 @@ tidy data frame and \code{print()} for a summary.
 Computes the \strong{maximum} run length of consecutive identical responses for
 every respondent — the canonical longstring statistic of Johnson (2005) and
 Meade & Craig (2012). Long runs flag straightlining. The score is computed
-over the raw response row (no scale blocking) and is bytewise compatible with
-\code{\link[careless:longstring]{careless::longstring()}} on present data.
+over the raw response row (no scale blocking).
 }
 \details{
 \strong{Cutoff.} The default cutoff is \code{ceiling(0.5 * p)} where \code{p} is the number
-of items (a fraction of the item count, read from the method registry). The
-\code{cutoff} argument overrides it: a value in \verb{(0, 1]} is interpreted as a
-\strong{fraction} of the item count (\code{ceiling(cutoff * p)}); a value greater than
-\code{1} is an \strong{absolute} run-length count. Note \code{cutoff = 1} is the fraction
-path (\code{ceiling(1 * p) = p}), not the literal count \code{1}. Respondents whose
-longest run is greater than or equal to the cutoff are flagged.
+of items. Override it with \strong{one} of two mutually exclusive arguments:
+\code{frac}, a fraction of the item count in \verb{(0, 1]} (resolving to
+\code{ceiling(frac * p)}), or \code{cutoff}, a literal run-length count in \verb{[1, p]}.
+Respondents whose longest run is greater than or equal to the resolved cutoff
+are flagged.
 
 \strong{Abstention.} A respondent who answered nothing (an all-\code{NA} row) abstains:
 both \code{value} and \code{flagged} are \code{NA} and the row is excluded from the flag
@@ -66,5 +67,8 @@ data. \emph{Psychological Methods}, 17(3), 437–455. \doi{10.1037/a0028085}
 }
 \seealso{
 \code{\link[careless:longstring]{careless::longstring()}}
+
+Other indirect indices:
+\code{\link[=cier_irv]{cier_irv()}}
 }
 \concept{indirect indices}

@@ -33,19 +33,21 @@ indices rather than any single threshold.
 All cutoffs resolve through one function, `resolve_cutoff()`, which branches on
 the registry's `default_cutoff_method`: `percentile` (an empirical quantile at a
 target false-positive rate `fpr`, default 0.05), `chisq` (`qchisq(1 - alpha, df)`
-for Mahalanobis distance, `alpha` = 0.001), and `fixed` (the longstring count,
-resolved as `ceiling(0.5 * ncol)` in that wrapper and passed through verbatim).
+for Mahalanobis distance, `alpha` = 0.001), and `fixed` (a literal threshold, or
+a fraction of the item count `ceiling(frac * ncol)` — longstring's default
+`frac = 0.5`).
 
 The percentile method applies the direction flip **exactly once**: `upper` flags
 the high tail (the `1 - fpr` quantile), `lower` flags the low tail (the `fpr`
-quantile). The registry stores each method's *literal directional quantile*
-(`cier_irv` 0.05/lower, `cier_even_odd` 0.95/upper); that stored value is the
-documented result of `(fpr = 0.05, the row's flag direction)`, never an input
-that is flipped again. This is the deliberate fix for the v1 footgun where a
-stored directional quantile was re-flipped via `1 - p` and landed on the wrong
-tail. A single `fpr` knob therefore means the same target tail mass for every
-index, which is what lets the analyst sweep `fpr` across {0.01, 0.05, 0.10}. The
-flag comparator (`>=` / `<=`) is applied separately, by `apply_flag()`.
+quantile). The registry stores the target false-positive tail mass `fpr`
+(`0.05`) for **every** percentile index regardless of direction; the
+`flag_direction` column selects the tail and `resolve_cutoff()` performs the
+single flip. This is the deliberate fix for the v1 footgun where a stored
+directional quantile (`0.95` for an upper index) was reused as `fpr` and
+re-flipped via `1 - p`, landing on the wrong tail. A single `fpr` knob therefore
+means the same target tail mass for every index, which is what lets the analyst
+sweep `fpr` across {0.01, 0.05, 0.10}. The flag comparator (`>=` / `<=`) is
+applied separately, by `apply_flag()`.
 
 `resolve_cutoff()` returns a bare numeric scalar (`NA_real_`, with a typed
 `cier_warning_insufficient_items`, when a percentile cutoff cannot be resolved
@@ -114,14 +116,26 @@ discoverable (`out$method` works), is the canonical S3 record shape, and matches
 the objects returned by `PerFit` / `mokken` and the prior version of the
 package. `cier_screen()` (slice 12) follows the same robust shape.
 
-## Cutoff: fraction-or-count lives in the one resolver
+## Cutoff overrides: a rate and a literal, mutually exclusive
 
-The fraction-or-count interpretation of a `fixed` cutoff (a value in `(0, 1]` is
-a fraction of the item count; a value `> 1` is an absolute count) lives in
-`resolve_cutoff()` itself, gated by an `n_items` argument — not in a per-index
-wrapper helper. This keeps the one-cutoff-path rule literally true: every cutoff,
-default or user-supplied, is resolved in the single resolver, and index wrappers
-contain no cutoff arithmetic.
+Each index exposes its cutoff override as **two mutually-exclusive arguments**: a
+rate (`fpr` for percentile indices, `alpha` for Mahalanobis; `frac`, a fraction
+of the item count, for longstring) and a literal `cutoff` on the score. A single
+overloaded argument was rejected: a value in `(0, 1]` cannot distinguish a rate
+from a literal threshold for indices whose scores fall in that range (IRV SDs,
+correlations, Gnormed), so e.g. an IRV `cutoff = 0.5` would be ambiguous. Each
+wrapper validates its supplied overrides up front with the shared input checks —
+`check_fraction()` for a fraction, `check_number()` for a literal `cutoff`
+against index-specific bounds (`[1, p]` for longstring, `[0, Inf)` for a
+non-negative score like IRV). The shared `resolve_index_cutoff()` helper then
+rejects supplying both (via `assert_single_override()`) and dispatches: a literal
+`cutoff` routes through the one resolver, otherwise the index's rate-based
+resolution runs. `resolve_cutoff()`'s `fixed` arithmetic is two pure modes —
+literal passthrough, or `ceiling(value * n_items)` for a fraction (rounded to
+remove floating-point noise) — and assumes a pre-validated value. This keeps the
+one-cutoff-path rule: every cutoff resolves through the single resolver, with the
+rate-vs-literal dispatch centralised in one helper rather than re-derived per
+wrapper.
 
 ## Method-properties registry schema
 

@@ -6,8 +6,12 @@
 # Returns: The input (invisibly) on success.
 # Invariants: A failure always raises a typed cier condition.
 
+# The check_* helpers wrap checkmate's predicate functions (which return TRUE or
+# a message string) so the diagnostics stay typed cier_error_input conditions
+# with the package's cli phrasing, rather than checkmate's plain assert errors.
+
 check_string <- function(x, arg, call = rlang::caller_env()) {
-  if (!is.character(x) || length(x) != 1L || is.na(x) || !nzchar(x)) {
+  if (!isTRUE(checkmate::check_string(x, min.chars = 1L))) {
     cier_abort(
       "cier_error_input",
       "{.arg {arg}} must be a non-empty character string.",
@@ -18,7 +22,7 @@ check_string <- function(x, arg, call = rlang::caller_env()) {
 }
 
 check_choice <- function(x, arg, choices, call = rlang::caller_env()) {
-  if (!is.character(x) || length(x) != 1L || is.na(x) || !(x %in% choices)) {
+  if (!isTRUE(checkmate::check_choice(x, choices))) {
     cier_abort(
       "cier_error_input",
       "{.arg {arg}} must be one of {.val {choices}}.",
@@ -28,16 +32,47 @@ check_choice <- function(x, arg, choices, call = rlang::caller_env()) {
   invisible(x)
 }
 
-is_number_in_range <- function(x, lower, upper) {
-  is.numeric(x) && length(x) == 1L && is.finite(x) && x >= lower && x <= upper
+# Guard the two cutoff-override knobs an index exposes: a rate (`fpr` / `alpha` /
+# `frac`) and a literal `cutoff`. They are mutually exclusive -- two ways to set
+# the same cutoff -- so accepting both would be ambiguous. Abort when both are
+# supplied. (Message stays generic so it reads correctly for every rate name.)
+assert_single_override <- function(rate, rate_name, cutoff,
+                                   call = rlang::caller_env()) {
+  if (!is.null(rate) && !is.null(cutoff)) {
+    cier_abort(
+      "cier_error_input",
+      c("Supply only one of {.arg {rate_name}} and {.arg cutoff}.",
+        "i" = "They are two ways to set the same cutoff."),
+      data = list(args = c(rate_name, "cutoff")), call = call
+    )
+  }
+  invisible(NULL)
 }
 
 check_number <- function(x, arg, lower = -Inf, upper = Inf,
                          call = rlang::caller_env()) {
-  if (!is_number_in_range(x, lower, upper)) {
+  if (!isTRUE(checkmate::check_number(x, lower = lower, upper = upper,
+                                      finite = TRUE))) {
     cier_abort(
       "cier_error_input",
       "{.arg {arg}} must be a single finite number in [{lower}, {upper}].",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
+
+# A fraction of the item count: a single finite number in the half-open
+# interval (0, 1] (0 would flag a zero-length run; values above 1 exceed the
+# item count). checkmate guards the closed [0, 1]; `&& x > 0` opens the lower end.
+check_fraction <- function(x, arg, call = rlang::caller_env()) {
+  is_fraction <- isTRUE(
+    checkmate::check_number(x, lower = 0, upper = 1, finite = TRUE)
+  ) && x > 0
+  if (!is_fraction) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single number in the interval (0, 1].",
       data = list(arg = arg, observed = x), call = call
     )
   }
