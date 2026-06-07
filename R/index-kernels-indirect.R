@@ -126,3 +126,137 @@ kernel_person_total <- function(responses) {
   value[k < 3L | !is.finite(value)] <- NA_real_
   as.numeric(value)
 }
+
+# ---- Even-odd / split-half family -------------------------------------------
+
+# Group column indices by their scale label, in first-appearance order, so a
+# heterogeneously-ordered battery still yields a reproducible block sequence.
+# `items$scale` is aligned to the columns of `responses`. Shared by the even-odd
+# kernel here and the personal-reliability split-half kernels.
+scale_block_indices <- function(items) {
+  scales <- items$scale
+  uniq <- unique(scales)
+  out <- vector("list", length(uniq))
+  names(out) <- uniq
+  for (lab in uniq) {
+    out[[lab]] <- which(scales == lab)
+  }
+  out
+}
+
+# Spearman-Brown correction 2r/(1+r) with the careless clamp at -1. NA in -> NA
+# out; a perfect inverse (r = -1) sends the ratio to -Inf, which the clamp pulls
+# to -1 (so the negated index value tops out at +1, the most-careless score).
+spearman_brown_clamp <- function(r) {
+  if (is.na(r)) {
+    return(NA_real_)
+  }
+  val <- (2 * r) / (1 + r)
+  if (is.na(val) || val < -1) {
+    return(-1)
+  }
+  val
+}
+
+# Reverse-score reverse-keyed items so the split-half family forms its half-means
+# on trait-aligned responses. A PER-METHOD keying step (not a global rescore:
+# longstring / irv / person-total need the raw responses), so only the split-half
+# wrappers call it. Strict no-op (returns `responses` unchanged) when no item is
+# reverse-keyed -- preserving the bytewise careless parity of no-reverse data --
+# and NA-preserving. Each reverse item is reflected with the self-inverse
+# (min + max) - x, where max = min + categories - 1 and min is the scale base
+# (items$min, default 1 -> the classic (categories + 1) - x for 1..categories
+# coding); declaring a 0-based or bipolar base keeps the reflection on the same
+# range. In the wrapper path `items` has been validated by check_items()
+# (categories present and non-NA, min finite/whole on every reverse item, min
+# defaulted to 1); the categories and min guards below are defensive backstops for
+# direct callers, keeping the single-kernel reuse path safe.
+apply_split_half_keying <- function(responses, items, call = rlang::caller_env()) {
+  rk <- items$reverse_keyed
+  if (!any(rk)) {
+    return(responses)
+  }
+  cats <- items$categories
+  if (is.null(cats) || anyNA(cats[rk])) {
+    offending <- if (is.null(cats)) which(rk) else which(rk & is.na(cats))
+    cier_abort(
+      "cier_error_input",
+      c("Reverse-keyed items need a known {.field categories} to reverse-score.",
+        "x" = "Reverse-keyed item(s) with no category count: {.val {offending}}."),
+      data = list(arg = "items$categories", observed = offending), call = call
+    )
+  }
+  mins <- items$min                       # scale base; default 1 for direct callers
+  if (is.null(mins)) {
+    mins <- rep(1L, length(rk))
+  } else if (anyNA(mins[rk])) {
+    offending <- which(rk & is.na(mins))
+    cier_abort(
+      "cier_error_input",
+      c("Reverse-keyed items need a known {.field min} (scale base) to reverse-score.",
+        "x" = "Reverse-keyed item(s) with no scale base: {.val {offending}}."),
+      data = list(arg = "items$min", observed = offending), call = call
+    )
+  }
+  rev_cols <- responses[, rk, drop = FALSE]
+  rev_max  <- mins[rk] + cats[rk] - 1L    # scale maximum per reverse item
+  reflect  <- mins[rk] + rev_max          # (min + max) self-inverse reflection
+  responses[, rk] <- rep(reflect, each = nrow(responses)) - rev_cols
+  responses
+}
+
+# Even-odd split: EVEN within-scale positions form the "first" half, ODD the
+# "second". cor() is symmetric, so this reproduces the even-vs-odd correlation
+# exactly (and bytewise with careless::evenodd()). Only called with k >= 2
+# (single-item scales are skipped in kernel_split_half_row).
+even_odd_split_fn <- function(k) {
+  pos <- seq_len(k)
+  list(first_idx  = pos[pos %% 2L == 0L],
+       second_idx = pos[pos %% 2L == 1L])
+}
+
+# Per-respondent split-half consistency over the scale blocks. `split_fn(k)`
+# returns list(first_idx, second_idx) of within-scale positions. For each block
+# of >= 2 items it forms the two half-means; across blocks it correlates the
+# first-half vs second-half mean vectors (pairwise-complete), Spearman-Brown
+# corrects, and returns the NEGATED value (high = careless). Returns a single
+# numeric, NA where the row abstains: fewer than two blocks yield a finite
+# half-mean pair, or the across-block correlation is undefined (a straightliner /
+# flat profile -> zero variance). Shared kernel for even-odd here and personal
+# reliability, per the single-kernel rule.
+kernel_split_half_row <- function(row, blocks, split_fn) {
+  n_blocks <- length(blocks)
+  first_means  <- rep(NA_real_, n_blocks)
+  second_means <- rep(NA_real_, n_blocks)
+  for (k in seq_len(n_blocks)) {
+    cols <- blocks[[k]]
+    if (length(cols) < 2L) {
+      next
+    }
+    vals <- row[cols]
+    split <- split_fn(length(cols))
+    first_means[[k]]  <- mean(vals[split$first_idx],  na.rm = TRUE)
+    second_means[[k]] <- mean(vals[split$second_idx], na.rm = TRUE)
+  }
+  first_means[is.nan(first_means)]   <- NA_real_
+  second_means[is.nan(second_means)] <- NA_real_
+  if (sum(!is.na(first_means) & !is.na(second_means)) < 2L) {
+    return(NA_real_)
+  }
+  r <- suppressWarnings(stats::cor(first_means, second_means,
+                                   use = "pairwise.complete.obs"))
+  sb <- spearman_brown_clamp(r)
+  if (is.na(sb)) NA_real_ else -sb
+}
+
+# Even-odd consistency kernel: kernel_split_half_row with the even/odd split, one
+# row at a time. Returns a per-respondent numeric vector (NA where the row
+# abstains). The wrapper reverse-scores keyed items before calling and resolves
+# the percentile abstention when every row is NA.
+kernel_even_odd <- function(responses, blocks) {
+  vapply(
+    seq_len(nrow(responses)),
+    function(i) kernel_split_half_row(responses[i, ], blocks, even_odd_split_fn),
+    numeric(1L)
+  )
+}

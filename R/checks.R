@@ -136,3 +136,139 @@ check_responses <- function(responses, arg = "responses",
   }
   m
 }
+
+# `scale`: required, character-coercible, every item labelled, >= min_scales
+# distinct labels (the split-half indices correlate across scales).
+check_items_scale <- function(items, min_scales, arg, call) {
+  if (is.null(items$scale)) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must have a {.field scale} column (one label per item).",
+      data = list(arg = arg), call = call
+    )
+  }
+  scale <- as.character(items$scale)
+  if (anyNA(scale) || any(!nzchar(scale))) {
+    cier_abort(
+      "cier_error_input",
+      "{.field scale} must be a non-missing label for every item.",
+      data = list(arg = arg), call = call
+    )
+  }
+  n_scales <- length(unique(scale))
+  if (n_scales < min_scales) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must have at least {min_scales} distinct {.field scale}s.",
+        "x" = "Found {n_scales}.",
+        "i" = "The split-half consistency indices correlate across scales."),
+      data = list(arg = arg, observed = n_scales, expected = min_scales),
+      call = call
+    )
+  }
+  scale
+}
+
+# `reverse_keyed`: optional logical, length n_items, no NA; defaults all-FALSE.
+check_items_reverse <- function(items, n_items, arg, call) {
+  rk <- items$reverse_keyed
+  if (is.null(rk)) {
+    return(rep(FALSE, n_items))
+  }
+  if (!is.logical(rk) || anyNA(rk)) {
+    cier_abort(
+      "cier_error_input",
+      "{.field reverse_keyed} must be a logical value (no {.val NA}) per item.",
+      data = list(arg = arg), call = call
+    )
+  }
+  rk
+}
+
+# `categories`: number of response options per item. Required -- a finite whole
+# number >= 2 -- only on items that are reverse-keyed (so they can be
+# reverse-scored as (categories + 1) - x); NA is permitted on forward items and
+# the column may be absent entirely when nothing is reverse-keyed. Returns the
+# column unchanged (or NULL when absent).
+check_items_categories <- function(items, reverse_keyed, arg, call) {
+  cats <- items$categories
+  if (!any(reverse_keyed)) {
+    return(cats)
+  }
+  rev_cats <- if (is.null(cats)) NA_real_ else cats[reverse_keyed]
+  # is.finite() rejects NA, NaN, and Inf in one predicate -- a non-finite
+  # category count would reflect to (Inf + 1) - x and poison the reverse columns.
+  ok <- is.numeric(rev_cats) && all(is.finite(rev_cats)) &&
+    all(rev_cats >= 2) && all(rev_cats == round(rev_cats))
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("Reverse-keyed items need an integer {.field categories} of at least 2.",
+        "i" = "Set {.field categories} (the number of response options) for \\
+               every reverse-keyed item."),
+      data = list(arg = arg), call = call
+    )
+  }
+  cats
+}
+
+# `min`: the response-scale minimum (base). Optional; defaults to 1 (the
+# 1..categories coding) when the column is absent. When supplied it generalises
+# the reverse-keying reflection to (min + max) - x (max = min + categories - 1),
+# so a 0-based or bipolar scale reflects onto itself. Validated like categories --
+# a finite whole number on every reverse-keyed item (any integer base: 0,
+# negative, and bipolar are allowed; there is no >= 2 bound) -- with NA permitted
+# on forward items. Returns the column, or rep(1L, n_items) when absent.
+check_items_min <- function(items, reverse_keyed, n_items, arg, call) {
+  mins <- items$min
+  if (is.null(mins)) {
+    return(rep(1L, n_items))
+  }
+  rev_mins <- mins[reverse_keyed]
+  ok <- length(rev_mins) == 0L ||
+    (is.numeric(rev_mins) && all(is.finite(rev_mins)) &&
+       all(rev_mins == round(rev_mins)))
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("Reverse-keyed items need a finite integer {.field min} (the scale base).",
+        "i" = "{.field min} is the smallest response option (default 1); set it \\
+               for every reverse-keyed item on a 0-based or bipolar scale."),
+      data = list(arg = arg), call = call
+    )
+  }
+  mins
+}
+
+# Validate the per-item `items` frame the split-half family uses (even-odd and
+# personal reliability). `items` is a data.frame with one row per item, aligned
+# to the columns of `responses`. Returns a normalized
+# list(scale, reverse_keyed, categories, min) on success; aborts cier_error_input
+# on any malformed field. `categories` is NULL when its column is absent
+# (permitted only when nothing is reverse-keyed); `min` defaults to all-1.
+check_items <- function(items, n_items, min_scales = 2L,
+                        arg = "items", call = rlang::caller_env()) {
+  if (!is.data.frame(items)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be a data.frame (one row per item).",
+        "x" = "Got {.cls {class(items)}}."),
+      data = list(arg = arg), call = call
+    )
+  }
+  if (nrow(items) != n_items) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must have one row per item (column of {.arg responses}).",
+        "x" = "Got {nrow(items)} item row{?s} for {n_items} column{?s}."),
+      data = list(arg = arg, observed = nrow(items), expected = n_items),
+      call = call
+    )
+  }
+  scale <- check_items_scale(items, min_scales, arg, call)
+  reverse_keyed <- check_items_reverse(items, n_items, arg, call)
+  categories <- check_items_categories(items, reverse_keyed, arg, call)
+  minimum <- check_items_min(items, reverse_keyed, n_items, arg, call)
+  list(scale = scale, reverse_keyed = reverse_keyed,
+       categories = categories, min = minimum)
+}

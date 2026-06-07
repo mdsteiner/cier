@@ -39,6 +39,10 @@ parity check.
 | person-total | per-row correlation vs. independent oracle (`ref_person_total`) | 1e-12 | `ref-person-total-donlon-fischer-1968.R` |
 | person-total | exact hand-computed fixture (`c(1, 1, -1, 1)`, linear item-mean profile) | 1e-12 | worked by hand |
 | person-total | vs. `PerFit::r.pbis()$PFscores` on complete data | 1e-4 | `PerFit` (4-dp output rounding) |
+| even-odd | per-row `-SB(r)` vs. independent oracle (`ref_even_odd`) | 1e-12 | `ref-evenodd-curran-2016.R` |
+| even-odd | analytic fixtures (consistent `-1`, inverse `+1`) | 1e-12 | worked by hand |
+| even-odd | honouring `reverse_keyed` == independently pre-scored input | 1e-12 | property |
+| even-odd | vs. `careless::evenodd(factors=)` on no-reverse-key data | 0 (bytewise) | `careless` (1.2.2) |
 
 ## How to use this table
 
