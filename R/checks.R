@@ -62,6 +62,24 @@ check_number <- function(x, arg, lower = -Inf, upper = Inf,
   invisible(x)
 }
 
+# A target tail probability / significance level: a single finite number
+# strictly inside the open interval (0, 1) (e.g. `alpha`, `fpr`). checkmate
+# guards the closed [0, 1]; `&& x > 0 && x < 1` opens both ends, so 0 (a cutoff
+# that flags nobody) and 1 (a cutoff that flags everybody) are rejected.
+check_open_unit <- function(x, arg, call = rlang::caller_env()) {
+  is_open_unit <- isTRUE(
+    checkmate::check_number(x, lower = 0, upper = 1, finite = TRUE)
+  ) && x > 0 && x < 1
+  if (!is_open_unit) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single number in the open interval (0, 1).",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
+
 # A fraction of the item count: a single finite number in the half-open
 # interval (0, 1] (0 would flag a zero-length run; values above 1 exceed the
 # item count). checkmate guards the closed [0, 1]; `&& x > 0` opens the lower end.

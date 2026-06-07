@@ -29,6 +29,7 @@ Imports:
 Suggests:
     callr,
     careless,
+    psych,
     roxygen2,
     testthat (>= 3.0.0),
     withr

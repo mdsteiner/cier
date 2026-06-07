@@ -123,19 +123,33 @@ rate (`fpr` for percentile indices, `alpha` for Mahalanobis; `frac`, a fraction
 of the item count, for longstring) and a literal `cutoff` on the score. A single
 overloaded argument was rejected: a value in `(0, 1]` cannot distinguish a rate
 from a literal threshold for indices whose scores fall in that range (IRV SDs,
-correlations, Gnormed), so e.g. an IRV `cutoff = 0.5` would be ambiguous. Each
-wrapper validates its supplied overrides up front with the shared input checks —
-`check_fraction()` for a fraction, `check_number()` for a literal `cutoff`
-against index-specific bounds (`[1, p]` for longstring, `[0, Inf)` for a
-non-negative score like IRV). The shared `resolve_index_cutoff()` helper then
-rejects supplying both (via `assert_single_override()`) and dispatches: a literal
-`cutoff` routes through the one resolver, otherwise the index's rate-based
-resolution runs. `resolve_cutoff()`'s `fixed` arithmetic is two pure modes —
-literal passthrough, or `ceiling(value * n_items)` for a fraction (rounded to
-remove floating-point noise) — and assumes a pre-validated value. This keeps the
-one-cutoff-path rule: every cutoff resolves through the single resolver, with the
-rate-vs-literal dispatch centralised in one helper rather than re-derived per
-wrapper.
+correlations, Gnormed), so e.g. an IRV `cutoff = 0.5` would be ambiguous.
+
+**Validation lives at the public boundary; the resolver trusts its inputs.** Each
+wrapper validates everything up front so a bad argument fails before the kernel
+runs: `check_open_unit()` for a rate in the open interval `(0, 1)` (`fpr` /
+`alpha`), `check_fraction()` for a fraction in `(0, 1]` (`frac`),
+`check_number()` for a literal `cutoff` against index-specific bounds (`[1, p]`
+for longstring, `[0, Inf)` for a non-negative score). Immediately after those
+checks the wrapper calls `assert_single_override()` (reject both knobs), then the
+kernel runs. The cutoff dispatch is then a plain conditional inline in the
+wrapper: **a literal `cutoff` is used verbatim** (already validated); otherwise
+the rate-based default is resolved through the one resolver,
+`resolve_cutoff(method = <registry method>, …)`. `resolve_cutoff()` and its
+private helpers are internal and do **no** input re-checking (their `method` /
+`direction` come from the registry and the rate/literal are wrapper-validated) —
+they only do the math and signal the runtime percentile abstention
+(`NA_real_` + `cier_warning_insufficient_items`).
+
+This keeps the one-cutoff-path rule — every rate-based **default** still resolves
+through the single `resolve_cutoff()` — while removing the earlier
+`resolve_index_cutoff()` indirection (a shared helper that took a per-index
+`rate_fn` closure). Inlining the two-line dispatch in each wrapper is shorter and
+more legible than the closure it replaced, and putting all validation in the
+public function gives the earliest possible failure. The cost is that a future
+wrapper which forgets to validate would pass bad input silently rather than get a
+typed error; the mitigation is the wrapper-validation convention plus per-wrapper
+input-error tests.
 
 ## Method-properties registry schema
 
@@ -161,3 +175,23 @@ Guttman errors (Gnormed) via `PerFit`, person scalability (Ht) via `mokken`.
 serve polytomous Likert responses; `mokken::coefH` on the transposed scale is the
 polytomous Ht that matches the reference values. Both packages are optional
 (`Suggests`), with a graceful skip when absent.
+
+## Mahalanobis degenerate covariance: warn and abstain
+
+The Mahalanobis index needs a sample covariance to compute any distance. When
+none can be estimated — fewer than two respondents carry data, or the covariance
+matrix is not invertible (more items than respondents or perfectly collinear
+items, so `solve()` fails; or a pairwise covariance with undefined entries — two
+items never co-answered, or an item answered by nobody — which yields a non-finite
+inverse rather than a `solve()` error) — every respondent's `value` is `NA` and
+no one is flagged, and
+the wrapper raises a typed `cier_warning_singular_covariance` whose structured
+`data$reason` names the cause (`"insufficient_responses"` or
+`"singular_covariance"`). A silent all-`NA` result was rejected: a singular
+covariance is a substantive, actionable analyst event (a collinear or
+over-wide item set), so it earns its own condition class rather than being folded
+into the cutoff layer's `cier_warning_insufficient_items`. This is the only
+wholesale-abstention case that warns; an individual all-`NA` respondent (alongside
+others who answered) is ordinary per-row abstention and stays silent, as in every
+other index. The kernel itself stays pure — it returns a status code, and the
+wrapper raises the condition.
