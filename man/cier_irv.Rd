@@ -74,6 +74,7 @@ Differences}, 84, 79–83. \doi{10.1016/j.paid.2014.08.021}
 
 Other indirect indices:
 \code{\link[=cier_longstring]{cier_longstring()}},
-\code{\link[=cier_mahalanobis]{cier_mahalanobis()}}
+\code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
+\code{\link[=cier_person_total]{cier_person_total()}}
 }
 \concept{indirect indices}

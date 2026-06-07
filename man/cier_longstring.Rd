@@ -70,6 +70,7 @@ data. \emph{Psychological Methods}, 17(3), 437–455. \doi{10.1037/a0028085}
 
 Other indirect indices:
 \code{\link[=cier_irv]{cier_irv()}},
-\code{\link[=cier_mahalanobis]{cier_mahalanobis()}}
+\code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
+\code{\link[=cier_person_total]{cier_person_total()}}
 }
 \concept{indirect indices}

@@ -82,3 +82,47 @@ kernel_mahalanobis <- function(responses) {
   value[keep] <- matrixStats::rowSums2((x_centered %*% sx_inv) * x_centered)
   list(value = value, status = "ok")
 }
+
+# ---- Person-total correlation (r_pbis) --------------------------------------
+
+# Per-respondent Pearson correlation of each respondent's RAW answered responses
+# with the whole-sample per-item mean vector (item-TOTAL form, as in
+# PerFit::r.pbis: the respondent's own value is included in the item mean). Low
+# values flag carelessness -- a careless pattern decouples from the group's
+# item-mean profile. Reverse-keying plays no part (keying-insensitive by design)
+# and the means are whole-sample, never scale-blocked, so the kernel needs no
+# item metadata.
+#
+# Vectorised masked-sum Pearson, identical (<= ~1.6e-14) to a per-row
+# stats::cor(x_i, m) loop (the reference oracle ref_person_total()): for each
+# respondent the present items mask out missing cells, the item mean m carries
+# only over answered cells, and the correlation is assembled from masked sums so
+# one pass covers the whole battery. Items answered by nobody give a 0/0 = NaN
+# mean that is forced to 0 -- they then contribute nothing to the masked products
+# rather than poisoning every row with NaN.
+#
+# Returns a bare numeric vector the length of nrow(responses): the per-respondent
+# correlation, NA where a respondent answered fewer than three items or either
+# side of the correlation has zero variance (a straightliner row, or a flat
+# item-mean profile). The wrapper needs no per-row warning -- the only condition
+# is the shared percentile-cutoff abstention when every respondent is NA -- so
+# the kernel returns the score vector alone, not a list. It stays pure.
+kernel_person_total <- function(responses) {
+  present <- !is.na(responses)
+  k <- rowSums(present)
+  xf <- responses
+  xf[!present] <- 0
+  col_n <- colSums(present)
+  m <- colSums(xf) / col_n
+  m[!is.finite(m)] <- 0
+  sx  <- rowSums(xf)
+  sxx <- rowSums(xf * xf)
+  sxm <- as.numeric(xf %*% m)
+  sm  <- as.numeric(present %*% m)
+  smm <- as.numeric(present %*% (m * m))
+  num <- sxm - sx * sm / k
+  den <- sqrt((sxx - sx * sx / k) * (smm - sm * sm / k))
+  value <- num / den
+  value[k < 3L | !is.finite(value)] <- NA_real_
+  as.numeric(value)
+}

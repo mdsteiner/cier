@@ -85,6 +85,7 @@ outliers via Mahalanobis distance.)
 
 Other indirect indices:
 \code{\link[=cier_irv]{cier_irv()}},
-\code{\link[=cier_longstring]{cier_longstring()}}
+\code{\link[=cier_longstring]{cier_longstring()}},
+\code{\link[=cier_person_total]{cier_person_total()}}
 }
 \concept{indirect indices}
