@@ -30,6 +30,18 @@ new_cier_index <- function(value, flagged, method, cutoff, direction) {
   )
 }
 
+# The noun `print` uses for an abstaining respondent. Most indices abstain only
+# on an all-missing row, so "no responses" is exact. The pairing correlation
+# indices (psychsyn, and the antonyms index once it lands) can abstain with a
+# full row -- too few qualifying item pairs to define a correlation -- so for them
+# the honest phrasing is "no score". Keyed by method (rather than a schema field)
+# so the wording matches each index's abstention semantics; the
+# matrix-completeness indices keep "no responses" and their snapshots are
+# unchanged.
+abstention_noun <- function(method) {
+  if (identical(method, "cier_psychsyn")) "no score" else "no responses"
+}
+
 #' Coerce a cier index to a data frame
 #'
 #' @param x A `cier_index` object.
@@ -77,7 +89,7 @@ print.cier_index <- function(x, ...) {
     }
     cli::cli_text("Flagged: {n_flagged} of {n_scored} scored respondent{?s} ({pct}%).")
     if (n_abstain > 0L) {
-      cli::cli_text("Abstained: {n_abstain} (no responses).")
+      cli::cli_text("Abstained: {n_abstain} ({abstention_noun(x$method)}).")
     }
     cli::cli_alert_info("Per-respondent scores in {.code $value}, flags in {.code $flagged}.")
   })

@@ -364,3 +364,90 @@ kernel_rpr <- function(responses, blocks, n_resamples, seed) {
   means[is.nan(means)] <- NA_real_
   means
 }
+
+# ---- Psychometric synonyms / antonyms ---------------------------------------
+
+# Whole-sample inter-item Pearson correlation used to discover synonym / antonym
+# item pairs. Pairwise-complete, so a missing cell drops only the pairs it
+# touches. Factored out so the synonym and antonym wrappers build the pairing
+# correlation with identical arguments. suppressWarnings: a constant
+# (zero-variance) item column yields NA correlations -- it simply forms no pair --
+# and stats::cor() would emit a base-R, locale-dependent "standard deviation is
+# zero" warning that must not leak (the package signals only typed cli conditions).
+pairing_cor <- function(responses) {
+  suppressWarnings(stats::cor(responses, use = "pairwise.complete.obs"))
+}
+
+# Discover the item pairs whose whole-sample inter-item correlation clears the
+# `critical_r` magnitude. Returns a 2-column integer matrix with pairs[, 1] >
+# pairs[, 2] (lower-triangle column indices, the larger item index first), or a
+# 0-row matrix when none qualify. `pairing` selects the tail: "syn" keeps
+# r > critical_r (strong positive), "ant" keeps r < -critical_r (strong
+# negative). Column-major traversal of the lower triangle makes the pair order
+# and orientation byte-identical to careless:::get_item_pairs(), preserving the
+# bytewise careless::psychsyn() parity. Shared by psychsyn (pairing = "syn") and
+# the antonyms index (pairing = "ant"); the `pairing` tail is distinct from the
+# registry flag direction.
+find_item_pairs <- function(responses, critical_r, pairing) {
+  critical_r <- abs(critical_r)
+  cor_mat <- pairing_cor(responses)
+  p <- ncol(cor_mat)
+  diag(cor_mat) <- NA_real_
+  cor_mat[upper.tri(cor_mat, diag = FALSE)] <- NA_real_
+  flat_idx <- if (identical(pairing, "syn")) {
+    which(cor_mat > critical_r)
+  } else {
+    which(cor_mat < -critical_r)
+  }
+  if (length(flat_idx) == 0L) {
+    return(matrix(integer(0L), ncol = 2L))
+  }
+  row_idx <- ((flat_idx - 1L) %% p) + 1L
+  col_idx <- ((flat_idx - 1L) %/% p) + 1L
+  matrix(c(row_idx, col_idx), ncol = 2L)
+}
+
+# Psychometric-synonyms / antonyms kernel: discover the qualifying pairs on the
+# whole sample once, then score every respondent in a single vectorised pass. The
+# per-respondent score is the Pearson correlation, within that respondent, across
+# the K qualifying pairs between the stacked first-item values (A) and second-item
+# values (B), dropping pairs where either side is missing. It is computed as a
+# masked-sum Pearson over the n x K matrices A and B (the kernel_person_total
+# technique): one set of rowSums replaces a per-row stats::cor() loop, a 4-6x
+# speedup that scales to large samples without a compiled backend. Returns a bare
+# numeric vector (the lean-schema shape), NA where a respondent has fewer than
+# three complete pairs (careless's `> 2` guard) or a pair side has zero variance
+# (correlation undefined); a respondent who answered nothing has no complete pairs
+# and so abstains. The two variance terms are clamped at 0 so floating noise on a
+# zero-variance side cannot send sqrt() to NaN with a warning -- such rows fall to
+# NA through the finite check. `pairing` is the pair-discovery tail ("syn" /
+# "ant"); pairing and scoring both use the raw responses, with no reverse-keying.
+#
+# Parity note: this masked-sum form is the same Pearson correlation as the per-row
+# cor() loop it replaces, but sums in a different order, so it matches
+# careless::psychsyn(resample_na = FALSE) to 1e-12 rather than bytewise (the loop
+# was exact). The independent oracle parity (1e-12) is unaffected. See
+# tests/reference/TOLERANCES.md and the ADR entry.
+kernel_psychsyn <- function(responses, critical_r, pairing) {
+  pairs <- find_item_pairs(responses, critical_r, pairing)
+  n <- nrow(responses)
+  if (nrow(pairs) == 0L) {
+    return(rep(NA_real_, n))
+  }
+  a_cols <- responses[, pairs[, 1L], drop = FALSE]
+  b_cols <- responses[, pairs[, 2L], drop = FALSE]
+  mask <- !is.na(a_cols) & !is.na(b_cols)
+  a_cols[!mask] <- 0
+  b_cols[!mask] <- 0
+  k   <- rowSums(mask)
+  sa  <- rowSums(a_cols)
+  sb  <- rowSums(b_cols)
+  saa <- rowSums(a_cols * a_cols)
+  sbb <- rowSums(b_cols * b_cols)
+  sab <- rowSums(a_cols * b_cols)
+  num <- sab - sa * sb / k
+  den <- sqrt(pmax(saa - sa * sa / k, 0) * pmax(sbb - sb * sb / k, 0))
+  value <- num / den
+  value[k <= 2L | !is.finite(value)] <- NA_real_
+  as.numeric(value)
+}

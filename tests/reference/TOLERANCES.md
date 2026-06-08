@@ -47,6 +47,10 @@ parity check.
 | personal-reliability (PR) | analytic fixtures (consistent `-1`, inverse `+1`) | 1e-12 | worked by hand |
 | personal-reliability | honouring `reverse_keyed` == independently pre-scored input | 1e-12 | property |
 | personal-reliability (RPR) | per-row mean over 25 seeded random split-halves vs independent oracle (`ref_rpr`) | 1e-10 | `ref-rpr-goldammer-2024.R` |
+| psychsyn | per-row stacked-pair correlation vs independent oracle (`ref_psychsyn`) | 1e-12 | `ref-psychsyn-meade-craig-2012.R` |
+| psychsyn | orthogonal-contrast hand fixture (pair set `{(2,1),(4,3),(6,5)}`, values `c(NA, 1, 1, 1)`) | 1e-12 | worked by hand |
+| psychsyn | vs. `careless::psychsyn(resample_na = FALSE)` on `careless_dataset` | 1e-12 | `careless` (1.2.2) |
+| psychsyn (pairing) | `cier_synonym_pairs()` vs. `careless::psychsyn_critval()` (full pairing, both tails) | 1e-12 | `careless` (1.2.2) |
 
 Personal reliability (PR / RPR) has **no cross-package partner**: `careless`,
 `psych`, `PerFit`, and `mokken` implement neither variant. The two independent
@@ -54,6 +58,17 @@ paper oracles above (`ref_pr`, `ref_rpr`) are therefore its parity checks. The
 RPR oracle additionally coordinates its random-draw order with production so a
 fixed-seed run matches bytewise -- a deliberate reproducibility constraint, not
 a tautology (the statistic itself is re-derived from scratch).
+
+Psychsyn's kernel scores each respondent with a **vectorised masked-sum** Pearson
+over the stacked pair matrices (one `rowSums` pass, not a per-row `cor()` loop).
+This is the same correlation as the per-row `cor()` that `careless::psychsyn` and
+the independent oracle use, but it sums in a different order, so it matches both
+at ~1e-13 — held at **1e-12**, not bytewise. (The earlier per-row-`cor()` kernel
+matched `careless` exactly at `0`; it was vectorised for a 4–6× speedup, trading
+the bytewise guarantee for scale and uniformity with the `person-total` kernel —
+see `ADR.md`, "Psychsyn/psychant kernel: vectorise".) The oracle re-derives the
+statistic by an independent path (it pre-filters complete cases before `cor()`),
+and the kernel matches it to ~1e-13 — comfortably inside the 1e-12 row above.
 
 ## How to use this table
 

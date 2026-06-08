@@ -195,3 +195,35 @@ wholesale-abstention case that warns; an individual all-`NA` respondent (alongsi
 others who answered) is ordinary per-row abstention and stays silent, as in every
 other index. The kernel itself stays pure — it returns a status code, and the
 wrapper raises the condition.
+
+## Psychsyn/psychant kernel: vectorise (masked-sum), relax careless parity to 1e-12
+
+The psychometric-synonyms / antonyms kernel originally scored each respondent with
+a per-row `stats::cor()` call inside a `vapply` loop, which matched
+`careless::psychsyn(resample_na = FALSE)` **bytewise** because `careless`'s own
+`syn_for_one` scores `cor()` on the same full stacked pair vectors. Profiling
+showed that per-row loop is ~85% of the call (one `cor()` per respondent); it
+makes the index roughly 4–6× slower than necessary and scales linearly with the
+respondent count.
+
+The kernel now scores every respondent in one vectorised pass: a masked-sum
+Pearson over the `n × K` stacked pair matrices (the same technique
+`kernel_person_total` uses), with the two variance terms clamped at zero so
+floating noise on a zero-variance pair side cannot send `sqrt()` to `NaN` with a
+warning. The statistic is unchanged — it is the same Pearson correlation — but the
+masked-sum sums in a different order, so the per-respondent scores move by
+≤ 1.1e-13. The cross-package parity with `careless::psychsyn(resample_na = FALSE)`
+is therefore **relaxed from bytewise (`0`) to `1e-12`** in `TOLERANCES.md`, and the
+test assertion moves from `expect_equal(tolerance = 0)` to `tolerance = 1e-12`.
+The independent-oracle parity (`ref_psychsyn`, which pre-filters complete cases) is
+unaffected — the vectorised kernel matches it to ~5e-15, still well inside 1e-12.
+
+The trade was accepted deliberately (Markus, this slice): the bytewise guarantee
+buys exactness against one external package, whereas the vectorisation buys a 4–6×
+speedup, sub-100 ms scoring at every realistic respondent count (so **no C++ /
+`src/`** is warranted — adding a compiled backend would impose a Rtools/portability
+burden against the "trace every number" mandate for no practical gain), and
+uniformity with the already-vectorised `kernel_person_total` (itself `1e-12` vs
+`PerFit`, for the same summation-order reason). The kernel stays a single pure
+function shared by psychsyn (`pairing = "syn"`) and psychant (`"ant"`), so the
+antonym index inherits both the speedup and the same tolerance.

@@ -73,6 +73,7 @@ Other indirect indices:
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
 \code{\link[=cier_person_total]{cier_person_total()}},
-\code{\link[=cier_personal_reliability]{cier_personal_reliability()}}
+\code{\link[=cier_personal_reliability]{cier_personal_reliability()}},
+\code{\link[=cier_psychsyn]{cier_psychsyn()}}
 }
 \concept{indirect indices}
