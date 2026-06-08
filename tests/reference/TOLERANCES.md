@@ -51,6 +51,9 @@ parity check.
 | psychsyn | orthogonal-contrast hand fixture (pair set `{(2,1),(4,3),(6,5)}`, values `c(NA, 1, 1, 1)`) | 1e-12 | worked by hand |
 | psychsyn | vs. `careless::psychsyn(resample_na = FALSE)` on `careless_dataset` | 1e-12 | `careless` (1.2.2) |
 | psychsyn (pairing) | `cier_synonym_pairs()` vs. `careless::psychsyn_critval()` (full pairing, both tails) | 1e-12 | `careless` (1.2.2) |
+| psychant | per-row stacked-pair correlation vs independent oracle (`ref_psychant`) | 1e-12 | `ref-psychant-meade-craig-2012.R` |
+| psychant | orthogonal-contrast hand fixture (antonym pair set `{(2,1),(4,3),(6,5)}`, values `c(NA, -1, -1, -1)`) | 1e-12 | worked by hand |
+| psychant | vs. `careless::psychsyn(anto = TRUE, resample_na = FALSE)` on a planted antonym fixture | 1e-12 | `careless` (1.2.2) |
 
 Personal reliability (PR / RPR) has **no cross-package partner**: `careless`,
 `psych`, `PerFit`, and `mokken` implement neither variant. The two independent
@@ -69,6 +72,17 @@ the bytewise guarantee for scale and uniformity with the `person-total` kernel �
 see `ADR.md`, "Psychsyn/psychant kernel: vectorise".) The oracle re-derives the
 statistic by an independent path (it pre-filters complete cases before `cor()`),
 and the kernel matches it to ~1e-13 — comfortably inside the 1e-12 row above.
+
+Psychant shares that same vectorised kernel via the `pairing = "ant"` tail
+(`r < -critical_r` instead of `r > critical_r`), so it carries the **identical
+1e-12** against its own independent oracle (`ref_psychant`, which reuses the
+psychsyn row correlation with the negated threshold) and against `careless`.
+`careless::psychant()` does not surface `resample_na`, so the deterministic
+parity comparison calls the underlying `psychsyn(anto = TRUE,
+resample_na = FALSE)` directly. `careless_dataset` carries **no** antonym pairs
+at `r < -0.60`, so the parity uses a constructed fixture with planted negative
+structure (items mapped to a 1–5 Likert) plus injected `NA`s to pin NA
+agreement.
 
 ## How to use this table
 

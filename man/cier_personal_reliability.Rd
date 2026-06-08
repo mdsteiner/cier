@@ -153,6 +153,7 @@ Other indirect indices:
 \code{\link[=cier_longstring]{cier_longstring()}},
 \code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
 \code{\link[=cier_person_total]{cier_person_total()}},
+\code{\link[=cier_psychant]{cier_psychant()}},
 \code{\link[=cier_psychsyn]{cier_psychsyn()}}
 }
 \concept{indirect indices}

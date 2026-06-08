@@ -31,15 +31,14 @@ new_cier_index <- function(value, flagged, method, cutoff, direction) {
 }
 
 # The noun `print` uses for an abstaining respondent. Most indices abstain only
-# on an all-missing row, so "no responses" is exact. The pairing correlation
-# indices (psychsyn, and the antonyms index once it lands) can abstain with a
-# full row -- too few qualifying item pairs to define a correlation -- so for them
-# the honest phrasing is "no score". Keyed by method (rather than a schema field)
-# so the wording matches each index's abstention semantics; the
-# matrix-completeness indices keep "no responses" and their snapshots are
-# unchanged.
+# on an all-missing row, so "no responses" is exact. The pairing-correlation
+# indices (psychsyn and psychant) can abstain with a full row -- too few
+# qualifying item pairs to define a correlation -- so for them the honest phrasing
+# is "no score". Keyed by method (rather than a schema field) so the wording
+# matches each index's abstention semantics; the matrix-completeness indices keep
+# "no responses" and their snapshots are unchanged.
 abstention_noun <- function(method) {
-  if (identical(method, "cier_psychsyn")) "no score" else "no responses"
+  if (method %in% c("cier_psychsyn", "cier_psychant")) "no score" else "no responses"
 }
 
 #' Coerce a cier index to a data frame
