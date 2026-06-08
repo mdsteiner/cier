@@ -32,8 +32,7 @@ compared against a careless signal that the indices themselves did not produce.
 Bundled under the Creative Commons Attribution 4.0 International licence
 (CC BY 4.0); see the package \code{LICENSE.note}. Only the 44 BFI items and the two
 careless indicators are retained from the original; no response,
-validity-indicator, or timing value was altered. See
-\code{data-raw/bruhlmann-2020-data-quality-SOURCE.md} for the full provenance.
+validity-indicator, or timing value was altered.
 }
 \examples{
 # The 44 BFI items are the first 44 columns; the last two are the labels.

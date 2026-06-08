@@ -19,8 +19,7 @@
 #' Bundled under the Creative Commons Attribution 4.0 International licence
 #' (CC BY 4.0); see the package `LICENSE.note`. Only the 44 BFI items and the two
 #' careless indicators are retained from the original; no response,
-#' validity-indicator, or timing value was altered. See
-#' `data-raw/bruhlmann-2020-data-quality-SOURCE.md` for the full provenance.
+#' validity-indicator, or timing value was altered.
 #'
 #' @source Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020).
 #'   Open data on the OSF project \url{https://osf.io/9vjur/}.
