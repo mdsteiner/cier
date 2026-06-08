@@ -39,7 +39,7 @@ mahalanobis_abstain_message <- function(status) {
 #' `alpha = 0.001`. Because this is a real null (not a ranking convention), the
 #' flag rate is **not** pinned at `alpha`: it is whatever share of respondents
 #' exceed the χ²(`p`) quantile, and can be informatively higher under
-#' contamination. The `0.001` default follows Tabachnick and Fidell's (2019)
+#' contamination. The `0.001` default follows Tabachnick and Fidell's (2014)
 #' recommendation of a conservative `p < .001` criterion for identifying
 #' multivariate outliers by Mahalanobis distance. It is **stricter** than
 #' `careless::mahad()`, whose default flags the upper 1% tail (its
@@ -81,9 +81,9 @@ mahalanobis_abstain_message <- function(status) {
 #' responses in survey data. *Journal of Experimental Social Psychology*, 66,
 #' 4–19. \doi{10.1016/j.jesp.2015.07.006}
 #'
-#' Tabachnick, B. G., & Fidell, L. S. (2019). *Using Multivariate Statistics*
-#' (7th ed.). Pearson. (Conservative `p < .001` criterion for multivariate
-#' outliers via Mahalanobis distance.)
+#' Tabachnick, B. G., & Fidell, L. S. (2014). *Using Multivariate Statistics*
+#' (6th ed.). Pearson New International Edition. (Conservative `p < .001`
+#' criterion for multivariate outliers via Mahalanobis distance.)
 #'
 #' @seealso [careless::mahad()], [psych::outlier()]
 #' @family indirect indices

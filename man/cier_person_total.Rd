@@ -95,6 +95,7 @@ Other indirect indices:
 \code{\link[=cier_even_odd]{cier_even_odd()}},
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_longstring]{cier_longstring()}},
-\code{\link[=cier_mahalanobis]{cier_mahalanobis()}}
+\code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
+\code{\link[=cier_personal_reliability]{cier_personal_reliability()}}
 }
 \concept{indirect indices}

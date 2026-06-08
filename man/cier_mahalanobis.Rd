@@ -42,7 +42,7 @@ upper tail are flagged -- the cutoff is \code{qchisq(1 - alpha, df = p)} with
 \code{alpha = 0.001}. Because this is a real null (not a ranking convention), the
 flag rate is \strong{not} pinned at \code{alpha}: it is whatever share of respondents
 exceed the χ²(\code{p}) quantile, and can be informatively higher under
-contamination. The \code{0.001} default follows Tabachnick and Fidell's (2019)
+contamination. The \code{0.001} default follows Tabachnick and Fidell's (2014)
 recommendation of a conservative \code{p < .001} criterion for identifying
 multivariate outliers by Mahalanobis distance. It is \strong{stricter} than
 \code{careless::mahad()}, whose default flags the upper 1\% tail (its
@@ -76,9 +76,9 @@ Curran, P. G. (2016). Methods for the detection of carelessly invalid
 responses in survey data. \emph{Journal of Experimental Social Psychology}, 66,
 4–19. \doi{10.1016/j.jesp.2015.07.006}
 
-Tabachnick, B. G., & Fidell, L. S. (2019). \emph{Using Multivariate Statistics}
-(7th ed.). Pearson. (Conservative \code{p < .001} criterion for multivariate
-outliers via Mahalanobis distance.)
+Tabachnick, B. G., & Fidell, L. S. (2014). \emph{Using Multivariate Statistics}
+(6th ed.). Pearson New International Edition. (Conservative \code{p < .001}
+criterion for multivariate outliers via Mahalanobis distance.)
 }
 \seealso{
 \code{\link[careless:mahad]{careless::mahad()}}, \code{\link[psych:outlier]{psych::outlier()}}
@@ -87,6 +87,7 @@ Other indirect indices:
 \code{\link[=cier_even_odd]{cier_even_odd()}},
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_longstring]{cier_longstring()}},
-\code{\link[=cier_person_total]{cier_person_total()}}
+\code{\link[=cier_person_total]{cier_person_total()}},
+\code{\link[=cier_personal_reliability]{cier_personal_reliability()}}
 }
 \concept{indirect indices}

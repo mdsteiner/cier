@@ -43,6 +43,17 @@ parity check.
 | even-odd | analytic fixtures (consistent `-1`, inverse `+1`) | 1e-12 | worked by hand |
 | even-odd | honouring `reverse_keyed` == independently pre-scored input | 1e-12 | property |
 | even-odd | vs. `careless::evenodd(factors=)` on no-reverse-key data | 0 (bytewise) | `careless` (1.2.2) |
+| personal-reliability (PR) | per-row `-SB(r)`, first/second-half vs independent oracle (`ref_pr`) | 1e-12 | `ref-pr-jackson-1976.R` |
+| personal-reliability (PR) | analytic fixtures (consistent `-1`, inverse `+1`) | 1e-12 | worked by hand |
+| personal-reliability | honouring `reverse_keyed` == independently pre-scored input | 1e-12 | property |
+| personal-reliability (RPR) | per-row mean over 25 seeded random split-halves vs independent oracle (`ref_rpr`) | 1e-10 | `ref-rpr-goldammer-2024.R` |
+
+Personal reliability (PR / RPR) has **no cross-package partner**: `careless`,
+`psych`, `PerFit`, and `mokken` implement neither variant. The two independent
+paper oracles above (`ref_pr`, `ref_rpr`) are therefore its parity checks. The
+RPR oracle additionally coordinates its random-draw order with production so a
+fixed-seed run matches bytewise -- a deliberate reproducibility constraint, not
+a tautology (the statistic itself is re-derived from scratch).
 
 ## How to use this table
 

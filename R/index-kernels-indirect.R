@@ -6,7 +6,9 @@
 # Args:    See per-kernel documentation below.
 # Returns: Numeric vectors; never raises typed errors (the wrappers validate).
 # Invariants:
-#   - Kernels are pure (no I/O, no global state) and never mutate inputs.
+#   - Kernels are pure (no I/O, no global state) and never mutate inputs. The one
+#     exception is kernel_rpr(): with a non-NULL seed it sets a local RNG seed and
+#     restores the caller's `.Random.seed` on exit, so it is net state-preserving.
 
 # ---- Longstring -------------------------------------------------------------
 
@@ -208,33 +210,48 @@ apply_split_half_keying <- function(responses, items, call = rlang::caller_env()
 # Even-odd split: EVEN within-scale positions form the "first" half, ODD the
 # "second". cor() is symmetric, so this reproduces the even-vs-odd correlation
 # exactly (and bytewise with careless::evenodd()). Only called with k >= 2
-# (single-item scales are skipped in kernel_split_half_row).
+# (single-item scales yield a NULL split in compute_block_splits).
 even_odd_split_fn <- function(k) {
   pos <- seq_len(k)
   list(first_idx  = pos[pos %% 2L == 0L],
        second_idx = pos[pos %% 2L == 1L])
 }
 
-# Per-respondent split-half consistency over the scale blocks. `split_fn(k)`
-# returns list(first_idx, second_idx) of within-scale positions. For each block
-# of >= 2 items it forms the two half-means; across blocks it correlates the
-# first-half vs second-half mean vectors (pairwise-complete), Spearman-Brown
-# corrects, and returns the NEGATED value (high = careless). Returns a single
-# numeric, NA where the row abstains: fewer than two blocks yield a finite
-# half-mean pair, or the across-block correlation is undefined (a straightliner /
-# flat profile -> zero variance). Shared kernel for even-odd here and personal
-# reliability, per the single-kernel rule.
-kernel_split_half_row <- function(row, blocks, split_fn) {
+# Precompute the within-scale split positions for every scale block: a per-block
+# list aligned to `blocks`, each entry list(first_idx, second_idx) for a block of
+# >= 2 items or NULL for a one-item block (skipped downstream). `split_fn(k)`
+# maps a block length to its split. Computing the splits here -- once for the
+# deterministic even-odd / PR callers (outside the per-respondent loop), or once
+# per respondent for RPR's random splits -- keeps split construction out of the
+# hot row loop in kernel_split_half_row(). RPR relies on this being one
+# sample.int() draw per >= 2-item block and NONE for a one-item block, so its RNG
+# stream stays in step with the reference oracle.
+compute_block_splits <- function(blocks, split_fn) {
+  lapply(blocks, function(cols) {
+    if (length(cols) < 2L) NULL else split_fn(length(cols))
+  })
+}
+
+# Per-respondent split-half consistency over the scale blocks. `splits` is the
+# precomputed per-block list from compute_block_splits(): each entry is
+# list(first_idx, second_idx) of within-scale positions, or NULL for a one-item
+# block (skipped). For each scored block it forms the two half-means; across
+# blocks it correlates the first-half vs second-half mean vectors
+# (pairwise-complete), Spearman-Brown corrects, and returns the NEGATED value
+# (high = careless). Returns a single numeric, NA where the row abstains: fewer
+# than two blocks yield a finite half-mean pair, or the across-block correlation
+# is undefined (a straightliner / flat profile -> zero variance). Shared kernel
+# for even-odd and personal reliability, per the single-kernel rule.
+kernel_split_half_row <- function(row, blocks, splits) {
   n_blocks <- length(blocks)
   first_means  <- rep(NA_real_, n_blocks)
   second_means <- rep(NA_real_, n_blocks)
   for (k in seq_len(n_blocks)) {
-    cols <- blocks[[k]]
-    if (length(cols) < 2L) {
+    split <- splits[[k]]
+    if (is.null(split)) {
       next
     }
-    vals <- row[cols]
-    split <- split_fn(length(cols))
+    vals <- row[blocks[[k]]]
     first_means[[k]]  <- mean(vals[split$first_idx],  na.rm = TRUE)
     second_means[[k]] <- mean(vals[split$second_idx], na.rm = TRUE)
   }
@@ -249,14 +266,101 @@ kernel_split_half_row <- function(row, blocks, split_fn) {
   if (is.na(sb)) NA_real_ else -sb
 }
 
-# Even-odd consistency kernel: kernel_split_half_row with the even/odd split, one
-# row at a time. Returns a per-respondent numeric vector (NA where the row
-# abstains). The wrapper reverse-scores keyed items before calling and resolves
-# the percentile abstention when every row is NA.
-kernel_even_odd <- function(responses, blocks) {
-  vapply(
-    seq_len(nrow(responses)),
-    function(i) kernel_split_half_row(responses[i, ], blocks, even_odd_split_fn),
-    numeric(1L)
-  )
+# Build a deterministic split-half kernel: a `function(responses, blocks)` that
+# precomputes the per-block split ONCE via `split_fn` (outside the per-respondent
+# loop) and scores every respondent through kernel_split_half_row(). Even-odd and
+# personal reliability (PR) are the SAME row loop differing only in their
+# deterministic split, so they share this factory (single-kernel rule). RPR is
+# deliberately NOT built here: its random splits must be drawn per respondent, so
+# kernel_rpr() keeps its own loop.
+make_split_half_kernel <- function(split_fn) {
+  function(responses, blocks) {
+    splits <- compute_block_splits(blocks, split_fn)
+    vapply(
+      seq_len(nrow(responses)),
+      function(i) kernel_split_half_row(responses[i, ], blocks, splits),
+      numeric(1L)
+    )
+  }
+}
+
+# Even-odd consistency kernel: the even/odd within-scale split. The wrapper
+# reverse-scores keyed items before calling and resolves the percentile
+# abstention when every row is NA.
+kernel_even_odd <- make_split_half_kernel(even_odd_split_fn)
+
+# ---- Personal reliability (PR / RPR) ----------------------------------------
+
+# First/second-half split for Personal Reliability (Jackson 1976): the first
+# ceil(k / 2) within-scale positions form the "first" half, the remaining
+# floor(k / 2) the "second". Only called with k >= 2 (one-item scales yield a
+# NULL split in compute_block_splits and are skipped).
+split_half_indices <- function(k) {
+  first <- seq_len(ceiling(k / 2L))
+  # The second half is the suffix after the first ceil(k/2) positions; an index
+  # slice avoids a set difference (first is always a prefix of seq_len(k)).
+  list(first_idx = first, second_idx = seq_len(k)[-first])
+}
+
+# Personal Reliability (PR) kernel: the deterministic first/second-half split.
+kernel_personal_reliability <- make_split_half_kernel(split_half_indices)
+
+# Random within-scale split for RPR: a uniform permutation of the k positions,
+# its first ceil(k / 2) entries forming the "first" half and the rest the
+# "second". Consumes exactly one sample.int(k, k) draw per call. Only called with
+# k >= 2 (one-item scales yield a NULL split and draw nothing -- see
+# compute_block_splits -- so the RNG stream stays in step with the oracle).
+random_split_indices <- function(k) {
+  perm <- sample.int(k, k)
+  # First ceil(k/2) of the shuffled permutation vs the rest; an index slice of
+  # the already-distinct permutation avoids a set difference.
+  half <- seq_len(ceiling(k / 2L))
+  list(first_idx = perm[half], second_idx = perm[-half])
+}
+
+# Restore the global RNG state captured before a local set.seed(): re-assign the
+# saved `.Random.seed`, or remove it when none existed, so the session returns to
+# its pre-call state. Lets a seeded kernel be reproducible WITHOUT disturbing the
+# caller's random stream.
+restore_random_seed <- function(saved) {
+  global <- globalenv()
+  if (is.null(saved)) {
+    if (exists(".Random.seed", envir = global, inherits = FALSE)) {
+      rm(".Random.seed", envir = global)
+    }
+  } else {
+    global[[".Random.seed"]] <- saved
+  }
+}
+
+# Resampled Personal Reliability (RPR) kernel (Goldammer et al. 2024): the mean
+# over `n_resamples` random within-scale split-half iterations of the per-row PR
+# statistic. With a non-NULL seed the draw order reproduces the reference oracle
+# (to 1e-10): iterations (outer), then respondents, then scales, with
+# compute_block_splits() drawing one permutation per >= 2-item scale per
+# respondent and none for a one-item scale. The seed is applied LOCALLY -- the
+# caller's global RNG state is saved and restored on exit -- so a seeded call is
+# reproducible WITHOUT disturbing the caller's random stream. A NULL seed draws
+# from the ambient stream (results then vary per call). Per respondent the value
+# is the mean of the finite per-iteration values (na.rm = TRUE), NA when every
+# iteration abstains. The seed / for RNG logic lives here, not in the thin
+# wrapper.
+kernel_rpr <- function(responses, blocks, n_resamples, seed) {
+  if (!is.null(seed)) {
+    saved <- globalenv()[[".Random.seed"]]   # NULL when no RNG has been drawn yet
+    on.exit(restore_random_seed(saved), add = TRUE)
+    set.seed(seed)
+  }
+  n <- nrow(responses)
+  per_iter <- matrix(NA_real_, nrow = n_resamples, ncol = n)
+  for (b in seq_len(n_resamples)) {
+    per_iter[b, ] <- vapply(seq_len(n), function(i) {
+      splits <- compute_block_splits(blocks, random_split_indices)
+      kernel_split_half_row(responses[i, ], blocks, splits)
+    }, numeric(1L))
+  }
+  # Per-respondent mean over iterations; an all-NA column yields NaN -> NA.
+  means <- matrixStats::colMeans2(per_iter, na.rm = TRUE)
+  means[is.nan(means)] <- NA_real_
+  means
 }

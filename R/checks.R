@@ -97,6 +97,47 @@ check_fraction <- function(x, arg, call = rlang::caller_env()) {
   invisible(x)
 }
 
+# A single logical flag: one non-missing TRUE/FALSE. Used for the boolean
+# wrapper switches (e.g. `resample`).
+check_flag <- function(x, arg, call = rlang::caller_env()) {
+  if (!isTRUE(checkmate::check_flag(x))) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single {.val TRUE} or {.val FALSE}.",
+      data = list(arg = arg), call = call
+    )
+  }
+  invisible(x)
+}
+
+# A count: a single positive whole number (>= 1, no NA). Used for the resampling
+# iteration count (`n_resamples`); checkmate's integerish tolerance rejects a
+# non-whole number such as 2.5.
+check_count <- function(x, arg, call = rlang::caller_env()) {
+  if (!isTRUE(checkmate::check_count(x, positive = TRUE))) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single positive whole number.",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
+
+# A single integer (integerish, finite, any sign, no NA). Used for an RNG `seed`,
+# where a fractional value would be silently truncated by `set.seed()`;
+# checkmate's integerish tolerance rejects a non-whole number such as 1.9.
+check_int <- function(x, arg, call = rlang::caller_env()) {
+  if (!isTRUE(checkmate::check_int(x))) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must be a single integer.",
+      data = list(arg = arg, observed = x), call = call
+    )
+  }
+  invisible(x)
+}
+
 # Coerce a user response payload to a validated numeric matrix. A data.frame or
 # tibble is accepted and coerced (so users never call as.matrix()); `NA` is the
 # only allowed missing marker -- NaN and infinities are rejected. This is the
