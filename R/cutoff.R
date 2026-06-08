@@ -1,11 +1,15 @@
 # Purpose: The single cutoff path for the whole package and the flag
 #          applicator that consumes it. `resolve_cutoff()` turns a vector of
 #          per-respondent index values into one numeric cutoff; `apply_flag()`
-#          turns that cutoff into per-respondent logical flags. Pure math, no
-#          I/O and no registry read -- each index wrapper reads its own registry
-#          row and passes the method / direction / rate it needs.
+#          turns that cutoff into per-respondent logical flags;
+#          `resolve_index_cutoff()` composes the two with `new_cier_index()` into
+#          the shared cutoff -> flag -> assemble tail used by the percentile
+#          indices. The cutoff math is pure, with no I/O and no registry read --
+#          each index wrapper reads its own registry row and passes the method /
+#          direction / rate it needs.
 # Args:    See per-function documentation below.
-# Returns: resolve_cutoff() -> numeric scalar; apply_flag() -> logical vector.
+# Returns: resolve_cutoff() -> numeric scalar; apply_flag() -> logical vector;
+#          resolve_index_cutoff() -> a cier_index.
 # Invariants:
 #   - These are INTERNAL resolvers that TRUST their inputs. Every public index
 #     wrapper validates the user-supplied rate (`fpr` / `alpha` / `frac`) and
@@ -104,4 +108,31 @@ apply_flag <- function(values, cutoff, direction, call = rlang::caller_env()) {
   }
   comparator <- if (identical(direction, "upper")) `>=` else `<=`
   !is.na(values) & comparator(values, cutoff)
+}
+
+# Purpose: Resolve the flagging cutoff and assemble the cier_index for a
+#   percentile index -- the shared cutoff -> flag -> assemble tail of cier_irv,
+#   cier_even_odd, cier_person_total, and cier_personal_reliability.
+# Args:
+#   value  - numeric per-respondent index values (NA where the row abstains).
+#   row    - the method's registry row (carries flag_direction,
+#            default_cutoff_method, default_cutoff_value, method).
+#   fpr    - the user's `fpr` override or NULL (NULL uses the registry default).
+#   cutoff - the user's literal `cutoff` override or NULL. Already validated by
+#            the wrapper; when supplied it passes through verbatim, otherwise the
+#            default is the empirical `fpr` percentile in the flag direction.
+#   call   - calling environment for the percentile-abstention warning.
+# Returns: a `cier_index` (via new_cier_index()).
+resolve_index_cutoff <- function(value, row, fpr, cutoff,
+                                 call = rlang::caller_env()) {
+  cutoff_value <- if (!is.null(cutoff)) {
+    cutoff
+  } else {
+    resolve_cutoff(values = value, direction = row$flag_direction,
+                   method = row$default_cutoff_method,
+                   fpr = if (is.null(fpr)) row$default_cutoff_value else fpr,
+                   call = call)
+  }
+  flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
+  new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
 }

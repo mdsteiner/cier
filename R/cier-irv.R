@@ -69,27 +69,12 @@
 cier_irv <- function(responses, fpr = NULL, cutoff = NULL) {
   call <- rlang::caller_env()
   responses <- check_responses(responses, call = call)
-  # Validate every input up front so a bad argument fails before the kernel runs.
-  # `fpr` is a target false-positive tail mass in the open interval (0, 1); a
-  # literal IRV `cutoff` is a non-negative SD threshold (0 flags only exact
-  # straightliners); the two overrides are mutually exclusive.
-  if (!is.null(fpr)) check_open_unit(fpr, "fpr", call = call)
-  if (!is.null(cutoff)) check_number(cutoff, "cutoff", lower = 0, call = call)
-  assert_single_override(fpr, "fpr", cutoff, call = call)
+  # `fpr` is a tail mass in (0, 1); a literal IRV `cutoff` is a non-negative SD
+  # threshold (0 flags only exact straightliners); they are mutually exclusive.
+  check_percentile_overrides(fpr, cutoff, lower = 0, call = call)
   row <- cier_method_row("cier_irv")
   # rowSds(na.rm = TRUE) returns NA where fewer than two items were answered, so
   # abstention needs no separate guard (cf. longstring's all-NA row).
   value <- kernel_irv(responses)
-  # A literal cutoff passes through verbatim (already validated); otherwise the
-  # default is the lower-tail `fpr` percentile of the observed scores.
-  cutoff_value <- if (!is.null(cutoff)) {
-    cutoff
-  } else {
-    resolve_cutoff(values = value, direction = row$flag_direction,
-                   method = row$default_cutoff_method,
-                   fpr = if (is.null(fpr)) row$default_cutoff_value else fpr,
-                   call = call)
-  }
-  flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
-  new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
+  resolve_index_cutoff(value, row, fpr, cutoff, call = call)
 }

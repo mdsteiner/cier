@@ -138,6 +138,23 @@ check_int <- function(x, arg, call = rlang::caller_env()) {
   invisible(x)
 }
 
+# Validate the two mutually-exclusive cutoff-override knobs every percentile
+# index exposes: `fpr` (a target false-positive tail mass in the open unit
+# interval) and a literal `cutoff` on the score (a finite number in
+# `[lower, upper]` -- the score's natural range, e.g. `[-1, 1]` for a correlation
+# or `[0, Inf)` for an SD). The shared front-end for cier_irv / cier_even_odd /
+# cier_person_total / cier_personal_reliability, called before the kernel runs so
+# a bad argument fails early.
+check_percentile_overrides <- function(fpr, cutoff, lower = -Inf, upper = Inf,
+                                       call = rlang::caller_env()) {
+  if (!is.null(fpr)) check_open_unit(fpr, "fpr", call = call)
+  if (!is.null(cutoff)) {
+    check_number(cutoff, "cutoff", lower = lower, upper = upper, call = call)
+  }
+  assert_single_override(fpr, "fpr", cutoff, call = call)
+  invisible(NULL)
+}
+
 # Coerce a user response payload to a validated numeric matrix. A data.frame or
 # tibble is accepted and coerced (so users never call as.matrix()); `NA` is the
 # only allowed missing marker -- NaN and infinities are rejected. This is the

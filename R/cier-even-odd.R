@@ -112,29 +112,13 @@ cier_even_odd <- function(responses, items, fpr = NULL, cutoff = NULL) {
   call <- rlang::caller_env()
   responses <- check_responses(responses, call = call)
   items <- check_items(items, ncol(responses), min_scales = 2L, call = call)
-  # Validate the cutoff overrides up front (early fail). `fpr` is a target tail
-  # mass in (0, 1); a literal `cutoff` is an even-odd score threshold in [-1, 1];
-  # the two are mutually exclusive.
-  if (!is.null(fpr)) check_open_unit(fpr, "fpr", call = call)
-  if (!is.null(cutoff)) {
-    check_number(cutoff, "cutoff", lower = -1, upper = 1, call = call)
-  }
-  assert_single_override(fpr, "fpr", cutoff, call = call)
+  # `fpr` is a tail mass in (0, 1); a literal `cutoff` is an even-odd score
+  # threshold in [-1, 1]; the two are mutually exclusive.
+  check_percentile_overrides(fpr, cutoff, lower = -1, upper = 1, call = call)
   row <- cier_method_row("cier_even_odd")
   # Reverse-score keyed items, then score the even-odd consistency. The kernel
   # returns NA where a row abstains, so abstention needs no separate guard.
   responses <- apply_split_half_keying(responses, items, call = call)
   value <- kernel_even_odd(responses, scale_block_indices(items))
-  # A literal cutoff passes through verbatim; otherwise the default is the
-  # upper-tail `1 - fpr` percentile of the observed scores.
-  cutoff_value <- if (!is.null(cutoff)) {
-    cutoff
-  } else {
-    resolve_cutoff(values = value, direction = row$flag_direction,
-                   method = row$default_cutoff_method,
-                   fpr = if (is.null(fpr)) row$default_cutoff_value else fpr,
-                   call = call)
-  }
-  flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
-  new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
+  resolve_index_cutoff(value, row, fpr, cutoff, call = call)
 }

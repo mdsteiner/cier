@@ -142,9 +142,9 @@ cier_personal_reliability <- function(responses, items, resample = TRUE,
   check_flag(resample, "resample", call = call)
   check_count(n_resamples, "n_resamples", call = call)
   if (!is.null(seed)) check_int(seed, "seed", call = call)
-  if (!is.null(fpr)) check_open_unit(fpr, "fpr", call = call)
-  if (!is.null(cutoff)) check_number(cutoff, "cutoff", lower = -1, upper = 1, call = call)
-  assert_single_override(fpr, "fpr", cutoff, call = call)
+  # `fpr` is a tail mass in (0, 1); a literal `cutoff` is a score threshold in
+  # [-1, 1]; the two are mutually exclusive.
+  check_percentile_overrides(fpr, cutoff, lower = -1, upper = 1, call = call)
   row <- cier_method_row("cier_personal_reliability")
   responses <- apply_split_half_keying(responses, items, call = call)
   blocks <- scale_block_indices(items)
@@ -153,14 +153,5 @@ cier_personal_reliability <- function(responses, items, resample = TRUE,
   } else {
     kernel_personal_reliability(responses, blocks)
   }
-  cutoff_value <- if (!is.null(cutoff)) {
-    cutoff
-  } else {
-    resolve_cutoff(values = value, direction = row$flag_direction,
-                   method = row$default_cutoff_method,
-                   fpr = if (is.null(fpr)) row$default_cutoff_value else fpr,
-                   call = call)
-  }
-  flagged <- apply_flag(value, cutoff_value, row$flag_direction, call = call)
-  new_cier_index(value, flagged, row$method, cutoff_value, row$flag_direction)
+  resolve_index_cutoff(value, row, fpr, cutoff, call = call)
 }
