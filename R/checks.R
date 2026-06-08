@@ -330,3 +330,99 @@ check_items <- function(items, n_items, min_scales = 2L,
   list(scale = scale, reverse_keyed = reverse_keyed,
        categories = categories, min = minimum)
 }
+
+# `categories` for the person-fit backends: required on EVERY item (not only
+# reverse-keyed ones) and a single homogeneous integer >= 2 -- PerFit's and
+# mokken's polytomous statistics work on one number of response categories
+# (Ncat). Returns the per-item vector on success.
+check_items_categories_homogeneous <- function(items, arg, call) {
+  cats <- items$categories
+  ok <- !is.null(cats) && is.numeric(cats) && all(is.finite(cats)) &&
+    all(cats >= 2) && all(cats == round(cats)) && length(unique(cats)) == 1L
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} needs a homogeneous integer {.field categories} >= 2 on \\
+         every item.",
+        "i" = "The person-fit statistics use one number of response categories \\
+               (Ncat) across all items."),
+      data = list(arg = arg), call = call
+    )
+  }
+  cats
+}
+
+# `min` for the person-fit backends: the scale base, used to reverse-key AND to
+# zero-base EVERY item (unlike the split-half family, which keys only reverse
+# items), so it must be a finite whole number on every item. Optional; defaults
+# to all-1 (the 1..categories coding) when the column is absent.
+check_items_min_personfit <- function(items, n_items, arg, call) {
+  mins <- items$min
+  if (is.null(mins)) {
+    return(rep(1L, n_items))
+  }
+  ok <- is.numeric(mins) && all(is.finite(mins)) && all(mins == round(mins))
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("{.field min} (the scale base) must be a finite integer on every item.",
+        "i" = "{.field min} is the smallest response option (default 1); set it \\
+               for a 0-based or bipolar scale."),
+      data = list(arg = arg), call = call
+    )
+  }
+  mins
+}
+
+# Validate the per-item `items` frame the person-fit bridges use (Gnormed, Ht).
+# Unlike the split-half family these need a single homogeneous `categories`
+# (PerFit / mokken are single-Ncat) on EVERY item and do NOT use `scale`. Returns
+# a normalized list(reverse_keyed, categories, min); aborts cier_error_input on
+# any malformed field.
+check_items_personfit <- function(items, n_items, arg = "items",
+                                  call = rlang::caller_env()) {
+  if (!is.data.frame(items)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be a data.frame (one row per item).",
+        "x" = "Got {.cls {class(items)}}."),
+      data = list(arg = arg), call = call
+    )
+  }
+  if (nrow(items) != n_items) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must have one row per item (column of {.arg responses}).",
+        "x" = "Got {nrow(items)} item row{?s} for {n_items} column{?s}."),
+      data = list(arg = arg, observed = nrow(items), expected = n_items),
+      call = call
+    )
+  }
+  categories <- check_items_categories_homogeneous(items, arg, call)
+  reverse_keyed <- check_items_reverse(items, n_items, arg, call)
+  minimum <- check_items_min_personfit(items, n_items, arg, call)
+  list(reverse_keyed = reverse_keyed, categories = categories, min = minimum)
+}
+
+# Thin, mockable wrapper around requireNamespace() so tests can simulate an
+# absent optional backend via testthat::local_mocked_bindings().
+cier_namespace_present <- function(pkg) {
+  requireNamespace(pkg, quietly = TRUE)
+}
+
+# Abort with a typed input error when an optional backend package an index needs
+# (a `Suggests` dependency) is not installed. Shared by the person-fit bridges
+# (PerFit for Gnormed, mokken for Ht): those indices cannot compute their
+# statistic without the backend, so absence is a precondition error the caller
+# fixes by installing the package.
+require_suggested <- function(pkg, fn, call = rlang::caller_env()) {
+  if (!cier_namespace_present(pkg)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.pkg {pkg}} is required for {.fn {fn}} but is not installed.",
+        "i" = "Install it with {.code install.packages(\"{pkg}\")}."),
+      data = list(arg = pkg, fn = fn), call = call
+    )
+  }
+  invisible(NULL)
+}

@@ -18,10 +18,12 @@ expected_registry <- function() {
     family = c(rep("indirect", 8L), "personfit", "personfit"),
     default_cutoff_method = c(
       "fixed", "percentile", "percentile", "percentile", "percentile",
-      "percentile", "chisq", "percentile", "percentile", "percentile"
+      "percentile", "chisq", "percentile", "perfit_null", "percentile"
     ),
     # Percentile rows store the false-positive tail mass (fpr) uniformly; the
     # flag_direction picks the tail and resolve_cutoff applies the single flip.
+    # Gnormed uses the PerFit Monte-Carlo null (perfit_null); its value is the
+    # nominal level (Blvl). Ht keeps percentile until its slice lands.
     default_cutoff_value = c(0.5, 0.05, 0.05, 0.05, 0.05, 0.05, 0.001, 0.05,
                              0.05, 0.05),
     flag_direction = c("upper", "lower", "upper", "upper", "lower", "upper",

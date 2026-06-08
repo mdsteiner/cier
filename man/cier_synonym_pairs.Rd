@@ -37,8 +37,9 @@ The pairs are the lower triangle of the whole-sample correlation matrix
 (\code{stats::cor(responses, use = "pairwise.complete.obs")}), so each pair appears
 once with the larger item index first (\code{item_i > item_j}). With \code{critical_r}
 set, the returned set is exactly the pairs \code{\link[=cier_psychsyn]{cier_psychsyn()}} scores at that
-threshold (synonyms: \code{r > critical_r}; antonyms, \code{antonym = TRUE}:
-\code{r < -critical_r}). With \code{critical_r = NULL} every non-missing pair is listed.
+threshold: synonym pairs whose inter-item correlation exceeds \code{critical_r}, or
+antonym pairs (\code{antonym = TRUE}) whose correlation is below \code{-critical_r}. With
+\code{critical_r = NULL} every non-missing pair is listed.
 A pair that involves a constant (zero-variance) item has an undefined
 correlation and is omitted. A threshold that no pair clears returns a zero-row
 frame (not an error).

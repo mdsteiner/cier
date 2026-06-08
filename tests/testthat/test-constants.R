@@ -6,7 +6,8 @@ test_that("family vocabulary is the v0 set", {
 })
 
 test_that("cutoff-method vocabulary is the v0 set", {
-  expect_identical(cier_cutoff_methods(), c("percentile", "fixed", "chisq"))
+  expect_identical(cier_cutoff_methods(),
+                   c("percentile", "fixed", "chisq", "perfit_null"))
 })
 
 test_that("flag-direction vocabulary is upper/lower", {

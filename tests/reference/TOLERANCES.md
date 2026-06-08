@@ -54,6 +54,10 @@ parity check.
 | psychant | per-row stacked-pair correlation vs independent oracle (`ref_psychant`) | 1e-12 | `ref-psychant-meade-craig-2012.R` |
 | psychant | orthogonal-contrast hand fixture (antonym pair set `{(2,1),(4,3),(6,5)}`, values `c(NA, -1, -1, -1)`) | 1e-12 | worked by hand |
 | psychant | vs. `careless::psychsyn(anto = TRUE, resample_na = FALSE)` on a planted antonym fixture | 1e-12 | `careless` (1.2.2) |
+| gnormed | per-row value vs independent oracle `round(ref_personfit_gnormed_poly, 4)` | 0 | `ref-personfit-niessen-2016.R` |
+| gnormed | vs `PerFit::Gnormed.poly` direct call (complete, non-keyed, n != p) | 0 (bytewise) | `PerFit` (1.4.7) |
+| gnormed | reduces to dichotomous `PerFit::Gnormed` at `Ncat = 2` | 1e-9 (obs 0) | `PerFit` (1.4.7) |
+| gnormed | Monte-Carlo null cutoff vs `PerFit::cutoff(fit, Blvl)$Cutoff`, same seed | 0 (bytewise) | `PerFit` (1.4.7) |
 
 Personal reliability (PR / RPR) has **no cross-package partner**: `careless`,
 `psych`, `PerFit`, and `mokken` implement neither variant. The two independent
@@ -83,6 +87,22 @@ resample_na = FALSE)` directly. `careless_dataset` carries **no** antonym pairs
 at `r < -0.60`, so the parity uses a constructed fixture with planted negative
 structure (items mapped to a 1–5 Likert) plus injected `NA`s to pin NA
 agreement.
+
+Gnormed's production scorer **is** `PerFit::Gnormed.poly` (single-kernel rule), so
+its genuine independent check is the closed-form oracle
+`ref_personfit_gnormed_poly` (a popularity-rank numerator + max-plus-knapsack
+denominator, re-derived from scratch and never calling the production bridge).
+`PerFit` rounds its scores to 4 decimals and the oracle is exact, so
+`round(oracle, 4)` matches **bytewise** (tolerance 0). The `PerFit::Gnormed.poly`
+direct-call row is not a redundant scorer check: the bridge supplies the
+preprocessing independently (zero-basing to `0..(Ncat - 1)`, persons-as-rows
+orientation, reverse-keying, complete-casing), so an `n != p` fixture makes a
+missing-transpose or raw-`1..k`-coding bridge diverge while the shared scorer
+holds it bytewise. The cutoff is the PerFit Monte-Carlo null (`PerFit::cutoff`),
+randomised but **reproducible under a seed**; the parity re-fits the same
+zero-based block and seeds identically immediately before the call, so it matches
+bytewise (the statistic is independent; only the RNG stream is coordinated -- the
+same white-box reproducibility constraint as RPR, not a tautology).
 
 ## How to use this table
 

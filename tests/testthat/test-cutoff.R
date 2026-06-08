@@ -93,6 +93,15 @@ test_that("the fraction path is robust to floating-point error (no ceiling bump)
   expect_identical(resolve_cutoff(method = "fixed", value = 0.21, n_items = 25), 6)
 })
 
+test_that("an unknown cutoff method is a typed state error, not a silent percentile", {
+  # resolve_cutoff() handles only the value-only methods (percentile / fixed /
+  # chisq). A model-referenced method like "perfit_null" (Gnormed) is resolved at
+  # its bridge from the fitted object and must NOT silently fall through to the
+  # percentile branch -- that would mis-resolve a future registry-driven caller.
+  expect_error(resolve_cutoff(values = 1:10, method = "perfit_null"),
+               class = "cier_error_state")
+})
+
 # ---- resolve_cutoff: abstention + edges -------------------------------------
 
 test_that("percentile abstains (NA + typed warning) when no finite values", {

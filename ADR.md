@@ -176,6 +176,34 @@ serve polytomous Likert responses; `mokken::coefH` on the transposed scale is th
 polytomous Ht that matches the reference values. Both packages are optional
 (`Suggests`), with a graceful skip when absent.
 
+## Gnormed cutoff: PerFit Monte-Carlo null
+
+Gnormed's default cutoff is **not** a sample percentile but the `PerFit`
+Monte-Carlo null (`PerFit::cutoff`): `PerFit` resamples model-conforming response
+vectors from the fitted object and takes the nominal-rate (`Blvl = fpr`) quantile
+of the statistic. A real null was chosen over the percentile ranking convention
+because, for a person-fit index, the null-referenced flag rate is **informative**
+— it can exceed `fpr` under contamination, whereas a sample percentile flags `fpr`
+by construction. The registry records this as a new `default_cutoff_method`,
+`perfit_null` (value `0.05`, the nominal level), so the registry stays the honest
+single source of the default.
+
+Three consequences follow. (1) `perfit_null` is the package's first
+**simulation-referenced** cutoff, so it is randomised; the wrapper exposes a
+`seed` argument and applies it **locally** (saving and restoring the caller's
+`.Random.seed`, exactly as `kernel_rpr` does), so a seeded call is reproducible
+without disturbing the session RNG. (2) Unlike the value-only strategies
+(`percentile` / `fixed` / `chisq`), the null needs the **fitted object**, not just
+the score vector, so it is resolved at the bridge (`resolve_gnormed_cutoff` /
+`resolve_perfit_null_cutoff`) rather than inside the value-only `resolve_cutoff()`
+— the one documented exception to "all cutoffs resolve through `resolve_cutoff`".
+The kernel therefore returns `list(value, fit)` so the simulation reuses the fit
+rather than refitting. (3) `PerFit` is **required** for the standalone index
+(scoring is impossible without it), so its absence is a typed
+`cier_error_input`, not the architecture's "fall back to the percentile" path —
+that fallback is unreachable here because there are no Gnormed values to rank when
+`PerFit` is absent.
+
 ## Mahalanobis degenerate covariance: warn and abstain
 
 The Mahalanobis index needs a sample covariance to compute any distance. When

@@ -102,8 +102,9 @@ inform_no_pairs <- function(strictest, strongest, antonym) {
 #' (`stats::cor(responses, use = "pairwise.complete.obs")`), so each pair appears
 #' once with the larger item index first (`item_i > item_j`). With `critical_r`
 #' set, the returned set is exactly the pairs [cier_psychsyn()] scores at that
-#' threshold (synonyms: `r > critical_r`; antonyms, `antonym = TRUE`:
-#' `r < -critical_r`). With `critical_r = NULL` every non-missing pair is listed.
+#' threshold: synonym pairs whose inter-item correlation exceeds `critical_r`, or
+#' antonym pairs (`antonym = TRUE`) whose correlation is below `-critical_r`. With
+#' `critical_r = NULL` every non-missing pair is listed.
 #' A pair that involves a constant (zero-variance) item has an undefined
 #' correlation and is omitted. A threshold that no pair clears returns a zero-row
 #' frame (not an error).

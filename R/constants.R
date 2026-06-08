@@ -13,9 +13,12 @@ cier_family_levels <- function() {
   c("indirect", "personfit")
 }
 
-# Cutoff resolution strategies used by the registry.
+# Cutoff resolution strategies used by the registry. "perfit_null" is the
+# PerFit Monte-Carlo null for the nonparametric person-fit indices (Gnormed):
+# unlike the value-only strategies it is referenced to a simulated null and so is
+# resolved at the bridge (it needs the fitted object), not in resolve_cutoff().
 cier_cutoff_methods <- function() {
-  c("percentile", "fixed", "chisq")
+  c("percentile", "fixed", "chisq", "perfit_null")
 }
 
 # Which tail of a statistic flags carelessness.

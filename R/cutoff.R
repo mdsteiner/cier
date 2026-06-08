@@ -90,7 +90,20 @@ resolve_cutoff <- function(values = NULL, direction = "upper",
   if (identical(method, "chisq")) {
     return(as.numeric(stats::qchisq(1 - alpha, df = df)))
   }
-  resolve_percentile_cutoff(values, direction, fpr, call)
+  if (identical(method, "percentile")) {
+    return(resolve_percentile_cutoff(values, direction, fpr, call))
+  }
+  # Any other registry method (e.g. "perfit_null") is model-referenced and must
+  # be resolved at its bridge from the fitted object -- it cannot be reached here.
+  # Erroring (rather than silently falling through to the percentile branch)
+  # guards a future caller that wires a non-value cutoff method into this path.
+  cier_abort(
+    "cier_error_state",
+    c("Cutoff method {.val {method}} is not resolved by {.fn resolve_cutoff}.",
+      "i" = "Model-referenced cutoffs (e.g. {.val perfit_null}) are resolved at \\
+             the bridge from the fitted object, not the value-only path."),
+    data = list(arg = "method", observed = method), call = call
+  )
 }
 
 # Purpose: Apply a resolved cutoff to per-respondent index values.
