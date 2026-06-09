@@ -16,9 +16,8 @@ of \code{responses} (\code{scale}, \code{reverse_keyed}, \code{categories}, opti
 \code{NULL} (default) runs only the six matrix-only indices and skips the four
 metadata indices with a recorded reason.}
 
-\item{methods}{Optional character vector of method ids to run (a subset of the
-screenable registry methods; see \code{cier_methods()}). \code{NULL} (default) runs
-every screenable index. An unknown id is a typed error.}
+\item{methods}{Optional character vector of method ids to run.
+\code{NULL} (default) runs every screenable index. An unknown id is a typed error.}
 
 \item{control}{Optional named list of per-index argument overrides, keyed by
 method id; each entry is a list of arguments forwarded to that index (for
@@ -44,7 +43,7 @@ single careless/not label} -- the count of flagged constructs and the
 agreement diagnostic are reported, and the researcher chooses how to threshold.
 }
 \details{
-\strong{What runs.} The registry's \code{screenable} indices (see \code{cier_methods()}),
+\strong{What runs.} The registry's \code{screenable} indices,
 optionally restricted by \code{methods}, are run in registry order. The four
 indices that need item metadata (\code{\link[=cier_even_odd]{cier_even_odd()}}, \code{\link[=cier_personal_reliability]{cier_personal_reliability()}},
 \code{\link[=cier_gnormed]{cier_gnormed()}}, \code{\link[=cier_ht]{cier_ht()}}) are \strong{skipped with a recorded reason} when
@@ -82,6 +81,16 @@ expected if the votes fired independently; observed far above expected makes a
 clustered careless subgroup visible. The Mahalanobis chi-square and Gnormed
 Monte-Carlo votes carry their calibrated null nominal (the rest are
 percentile, hence \code{NA}).
+
+\strong{Interpreting and reporting.} The percentile cutoff is a \strong{ranking
+convention}, not a calibrated false-positive rate: it cuts a tail of the size
+you choose (\code{fpr}) and flags about that share of \emph{this} sample by construction.
+It is \strong{not} Goldammer et al.'s simulated-null Sen95 operating point and makes
+no claim about the true false-positive rate. Treat the exclusion as a
+researcher decision: \strong{report results before and after} removing flagged
+respondents, and show the flag rate across \code{fpr} (for example 0.01, 0.05, 0.10)
+so readers can see its sensitivity to a threshold you set. \code{vignette("cier")}
+walks through this.
 }
 \examples{
 # The 44 BFI items are the first 44 columns of the bundled example data; a
@@ -102,10 +111,14 @@ head(as.data.frame(screen))
 \references{
 Curran, P. G. (2016). Methods for the detection of carelessly invalid
 responses in survey data. \emph{Journal of Experimental Social Psychology}, 66,
-4–19. \doi{10.1016/j.jesp.2015.07.006}
+4-19. \doi{10.1016/j.jesp.2015.07.006}
+
+Goldammer P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., &
+Antonakis, J. (2024) Careless responding detection revisited: Accuracy of
+direct and indirect measures. \emph{Behavior Research Methods}, 56, 8422-8449.
 
 Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey
-data. \emph{Psychological Methods}, 17(3), 437–455. \doi{10.1037/a0028085}
+data. \emph{Psychological Methods}, 17(3), 437-455. \doi{10.1037/a0028085}
 }
 \seealso{
 The index functions \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}},

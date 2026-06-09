@@ -19,7 +19,7 @@
       Direction: upper -- higher values flag carelessness.
       Cutoff: 1 -- respondents with value >= 1 are flagged.
       Flagged: 3 of 11 scored respondents (27.3%).
-      Abstained: 1 (no responses).
+      Abstained: 1 (no score).
       i Per-respondent scores in `$value`, flags in `$flagged`.
       
 

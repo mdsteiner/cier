@@ -17,6 +17,7 @@
 }
 \description{
 The flag count and rate are computed over respondents who produced a usable
-score; abstaining respondents (all-missing rows, \code{value = NA}) are excluded
-from both the count and the rate and reported on their own line.
+score; abstaining respondents (\code{value = NA}, whether from missing data or an
+unscalable response pattern) are excluded from both the count and the rate and
+reported on their own line.
 }

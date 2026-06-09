@@ -30,21 +30,6 @@ new_cier_index <- function(value, flagged, method, cutoff, direction) {
   )
 }
 
-# The noun `print` uses for an abstaining respondent. Most indices abstain only
-# on an all-missing row, so "no responses" is exact. The pairing-correlation
-# indices (psychsyn and psychant) can abstain with a full row -- too few
-# qualifying item pairs to define a correlation -- Gnormed excludes a respondent
-# for any single missing cell, and Ht additionally abstains on a fully-answered
-# straightliner (a zero-variance row is unscalable), so for these the honest
-# phrasing is "no score" (the respondent answered but received no score). Keyed by
-# method (rather than a schema field) so the wording matches each index's
-# abstention semantics; the matrix-completeness indices keep "no responses" and
-# their snapshots are unchanged.
-abstention_noun <- function(method) {
-  no_score <- c("cier_psychsyn", "cier_psychant", "cier_gnormed", "cier_ht")
-  if (method %in% no_score) "no score" else "no responses"
-}
-
 #' Coerce a cier index to a data frame
 #'
 #' @param x A `cier_index` object.
@@ -58,8 +43,9 @@ as.data.frame.cier_index <- function(x, ...) {
 #' Print a cier index
 #'
 #' The flag count and rate are computed over respondents who produced a usable
-#' score; abstaining respondents (all-missing rows, `value = NA`) are excluded
-#' from both the count and the rate and reported on their own line.
+#' score; abstaining respondents (`value = NA`, whether from missing data or an
+#' unscalable response pattern) are excluded from both the count and the rate and
+#' reported on their own line.
 #'
 #' @param x A `cier_index` object, as returned by an index function such as
 #'   [cier_longstring()].
@@ -92,7 +78,7 @@ print.cier_index <- function(x, ...) {
     }
     cli::cli_text("Flagged: {n_flagged} of {n_scored} scored respondent{?s} ({pct}%).")
     if (n_abstain > 0L) {
-      cli::cli_text("Abstained: {n_abstain} ({abstention_noun(x$method)}).")
+      cli::cli_text("Abstained: {n_abstain} (no score).")
     }
     cli::cli_alert_info("Per-respondent scores in {.code $value}, flags in {.code $flagged}.")
   })

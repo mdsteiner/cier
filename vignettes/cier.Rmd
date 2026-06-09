@@ -1,0 +1,158 @@
+---
+title: "Getting started with cier"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with cier}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## What `cier` does
+
+Careless and insufficient-effort responding (C/IER) is survey data from people who
+were not engaging with the items. `cier` flags it with **indirect, response-pattern
+indices** -- longstring, intra-individual response variability (IRV), even-odd and
+personal reliability, psychometric synonyms and antonyms, Mahalanobis distance,
+person-total correlation, and two nonparametric person-fit statistics (Gnormed, Ht).
+Each index scores every respondent and flags a tail through a cutoff rule. 
+The current set follows the recommended indirect battery evaluated by Goldammer et al. 
+(2024); more criteria may be added in later versions. T
+
+## The example data
+
+`bfi_careless` is 394 crowdsourced respondents (Brühlmann et al., 2020) who answered
+the 44-item Big Five Inventory alongside **two independent attention checks**.
+
+```{r}
+library(cier)
+dim(bfi_careless)
+names(bfi_careless)[c(1:3, 45:46)]
+```
+
+The first 44 columns are the BFI items; the last two -- `v_Bogus_Item` and `v_IRI`
+-- are the attention checks. Those labels are useful context, but treat them with
+care: an attention check is a **partial and biased** signal. A respondent can be
+careless and still answer the check correctly, and a careful but figurative reader
+can fail one. They have to be designed into a study in advance, and they are not
+ground truth -- so this vignette does not score the indices against them.
+
+## One index in isolation
+
+Every index is a function on the response matrix. Resampled personal reliability
+(RPR) is one of the stronger indirect indicators: it splits each scale in half many
+times and correlates the halves, so a respondent whose answers are internally
+inconsistent scores high. The consistency indices need some item metadata:
+which scale each item belongs to, whether it is reverse-keyed, and how many response
+options it has. Build that from the BFI column names: the scale is the letters after
+`v_BFI_`, a trailing `_R` marks a reverse-keyed item, and every item is a 5-point
+scale.
+
+```{r}
+resp <- bfi_careless[, 1:44]
+nm   <- names(resp)
+items <- data.frame(
+  scale         = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
+  reverse_keyed = grepl("_R$", nm),
+  categories    = 5L
+)
+
+rpr <- cier_personal_reliability(resp, items, seed = 1)
+rpr
+```
+
+The print-out names the **direction** (an inconsistent respondent scores high, so
+the upper tail flags), the resolved **cutoff**, and the flag rate. Note the
+**abstentions**: these are respondents `cier` could not score, returned as `NA`.
+Here they are straightliners -- people who gave the same answer to every item, so
+there is no within-person variation to correlate. (`seed` makes the random
+split-halves reproducible.)
+
+The scores and flags live in `$value` / `$flagged`, or as a tidy frame:
+
+```{r}
+head(as.data.frame(rpr))
+```
+
+## The whole battery
+
+`cier_screen()` runs the screenable indices at once and prints a transparent flag
+table. It reuses the same `items`:
+
+```{r}
+screen <- cier_screen(resp, items,
+  control = list(cier_personal_reliability = list(seed = 1),
+                 cier_gnormed = list(seed = 1)))
+screen
+```
+
+Note that even-odd and personal reliability measure the same construct (internal 
+consistency), so they collapse to one vote. Counting them twice would double-weight 
+one signal. That is why ten indices become nine votes. 
+
+`cier_psychsyn` / `cier_psychant` abstain (`0 / 0`) because the BFI's
+inter-item correlations never exceed the default pairing threshold, so there are no
+synonym or antonym pairs to score. `cier_psychsyn_critval()` and 
+`cier_synonym_pairs()` can be used to investigate the item-pair correlations. 
+
+The agreement block is the real signal: far more respondents are flagged by two or
+more votes than independent indices would produce, and that excess concentration is
+what points to genuine careless responding rather than index-specific noise.
+
+`Skipped: 0` here because `PerFit` and `mokken` (which back Gnormed and Ht) are
+installed; without them those two indices are skipped with a recorded reason in
+`screen$skipped`, and the rest of the screen still runs.
+
+Because the signal is in agreement, extract respondents by the number of constructs
+that flagged them, then subset for downstream work:
+
+```{r}
+flagged <- cier_flagged_cases(screen, min_votes = 2)
+length(flagged)
+head(as.data.frame(screen))
+```
+
+## Choosing a cutoff is a ranking decision, not a calibration
+
+Every percentile index cuts the tail at a target fraction (`fpr`, default 0.05). It
+is essential to be clear on what that does **not** mean: it is a **ranking
+convention**, not a calibrated false-positive rate. A sample percentile flags about
+that fraction *by construction* -- exactly so for a continuous score, approximately
+when scores tie (common with coarse Likert items):
+
+```{r}
+for (f in c(0.01, 0.05, 0.10)) {
+  fl <- cier_irv(resp, fpr = f)$flagged
+  cat(sprintf("fpr %.2f  ->  %.1f%% flagged\n", f, 100 * mean(fl, na.rm = TRUE)))
+}
+```
+
+The rate tracks `fpr` because you *defined* it to. This is *not* Goldammer et
+al.'s Sen95 operating point, which is estimated against a simulated null of honest
+responding; `cier`'s percentile makes no claim about the true false-positive rate.
+Use it to rank respondents and cut a tail of the size you choose.
+(Mahalanobis distance and Gnormed are the exceptions: they reference a calibrated
+null -- a chi-square tail and a Monte-Carlo null -- rather than a sample percentile.)
+
+## Reporting
+
+Because the cutoff is a ranking choice, the exclusion is a researcher decision, not a
+fact the data hands you. Two habits keep that honest:
+
+- **Report results before and after exclusion.** If a conclusion only holds once
+  flagged respondents are removed, that is itself a finding to disclose.
+- **Show the flag rate across `fpr`** (for example 0.01, 0.05, 0.10, as above) so
+  readers can see how sensitive the exclusion is to a threshold you picked.
+
+## References
+
+Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020). The quality of
+data collected online: An investigation of careless responding in a crowdsourced
+sample. *Methods in Psychology, 2*, 100022.
+
+Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis, J.
+(2024). Careless responding detection revisited: Accuracy of direct and indirect
+measures. *Behavior Research Methods, 56*(8), 8422-8449.

@@ -590,3 +590,22 @@ test_that("print reports abstaining respondents on their own line (PR)", {
     expect_snapshot(print(cier_personal_reliability(x, it, resample = FALSE)))
   })
 })
+
+test_that("a complete straightliner abstains as '(no score)', not '(no responses)'", {
+  # Regression guard for the reason-neutral abstention noun. A fully-answered
+  # straightliner has zero within-person variance, so the split-half correlation
+  # is undefined and PR abstains -- with NO missing data. The respondent answered
+  # every item, so the old method-keyed '(no responses)' was a false reason; the
+  # reason-neutral '(no score)' is the honest wording the print must use.
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  x  <- rbind(rand_matrix(11L, 12L, 6L), rep(3, 12L))  # row 12: complete straightliner
+  out <- cier_personal_reliability(x, it, resample = FALSE)
+  expect_true(is.na(out$value[12L]))                   # abstains (unscalable)
+  expect_false(anyNA(x[12L, ]))                         # yet has no missing data
+  printed <- withr::with_options(
+    list(cli.width = 80, cli.unicode = FALSE),
+    capture.output(print(out))
+  )
+  expect_true(any(grepl("(no score)", printed, fixed = TRUE)))
+  expect_false(any(grepl("(no responses)", printed, fixed = TRUE)))
+})
