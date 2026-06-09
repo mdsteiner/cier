@@ -125,6 +125,27 @@ null** row: no model-conforming null exists for the mokken-backed polytomous
 statistic, so its cutoff is the empirical lower-tail percentile (`stats::quantile`,
 already covered by the slice-1 cutoff rows).
 
+## Slice 12 — `cier_screen()` combiner
+
+The screen is an orchestrator, not a statistic, so it has **no cross-package
+partner**: `careless` / `psych` / `PerFit` / `mokken` provide no equivalent
+combined screen with this vote collapse. Its parity rows are therefore internal.
+
+| Quantity | Target tolerance | Reference |
+|---|---:|---|
+| `screen$indices[[m]]` vs the direct `cier_<m>()` call (same args / seed) | 0 (identical) | the index wrappers |
+| `$votes` (OR-collapse, NA -> FALSE) vs the independent oracle `ref_collapse_votes` | 0 (identical) | `ref-screen-combiner.R` |
+| `$agreement` vs `flag_agreement(ref-collapsed votes, null_rate)` | default `expect_equal` | `ref-screen-combiner.R` + the diagnostic's own enumeration oracle |
+
+The internal-parity row (tolerance 0) is the screen's core contract: running an
+index through the screen must not move a single per-respondent value or flag. The
+collapse is re-derived independently (`ref_collapse_votes`: logical OR with
+`NA -> FALSE`, never the production `collapse_votes`); the agreement reuses the
+already-oracle-tested `flag_agreement()` on those independently-collapsed votes,
+so the screen test pins only that it is fed the collapsed votes plus the correct
+per-vote null nominal (chi-square / Monte-Carlo nominal for the null-referenced
+votes, `NA` for the percentile votes).
+
 ## How to use this table
 
 - Tests in `tests/testthat/test-cutoff.R` / `test-diagnostics.R` assert these

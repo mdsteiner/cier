@@ -4,7 +4,7 @@
 registry_schema_columns <- function() {
   c("method", "family", "paper_year", "paper_citation_key", "doi",
     "default_cutoff_method", "default_cutoff_value", "flag_direction",
-    "companion_methods", "backend", "screenable", "notes")
+    "companion_methods", "backend", "screenable", "vote_group", "notes")
 }
 
 # The ten v0 rows with their behaviourally-binding fields (the spec).
@@ -29,11 +29,16 @@ expected_registry <- function() {
     flag_direction = c("upper", "lower", "upper", "upper", "lower", "upper",
                        "upper", "lower", "upper", "lower"),
     backend = c(rep(NA_character_, 8L), "PerFit", "mokken"),
+    # even-odd and personal_reliability share the `consistency` vote so they
+    # collapse to ONE vote in cier_screen(); every other index is its own vote.
+    vote_group = c("cier_longstring", "cier_irv", "consistency", "consistency",
+                   "cier_psychsyn", "cier_psychant", "cier_mahalanobis",
+                   "cier_person_total", "cier_gnormed", "cier_ht"),
     stringsAsFactors = FALSE
   )
 }
 
-test_that("the registry loads as a 10-row, 12-column object and caches", {
+test_that("the registry loads as a 10-row, 13-column object and caches", {
   reg <- cier_methods()
   expect_s3_class(reg, "cier_method_info")
   expect_identical(nrow(reg), 10L)
@@ -51,7 +56,18 @@ test_that("each row's behaviourally-binding fields match the spec", {
   expect_equal(reg$default_cutoff_value, exp$default_cutoff_value)
   expect_identical(reg$flag_direction, exp$flag_direction)
   expect_identical(reg$backend, exp$backend)
+  expect_identical(reg$vote_group, exp$vote_group)
   expect_true(all(reg$screenable))
+})
+
+test_that("the consistency construct collapses even-odd + personal_reliability", {
+  reg <- cier_methods()
+  vg <- reg$vote_group[match(c("cier_even_odd", "cier_personal_reliability"),
+                             reg$method)]
+  expect_identical(vg, c("consistency", "consistency"))
+  # Every other index keeps a distinct vote (its own id), so only this pair fuses.
+  singletons <- reg$vote_group[!reg$vote_group %in% "consistency"]
+  expect_identical(anyDuplicated(singletons), 0L)
 })
 
 test_that("person-fit backends are PerFit (Gnormed) and mokken (Ht)", {
@@ -96,5 +112,17 @@ test_that("the validator catches realistic registry-edit mistakes", {
   na_value <- as.data.frame(cier_methods())
   na_value$default_cutoff_value[1] <- NA_real_
   expect_error(validate_cier_method_info(new_cier_method_info(na_value)),
+               class = "cier_error_data")
+
+  # A missing vote_group would silently drop an index from the screen's vote
+  # collapse, so it is a registry-data error (not a coercion NA).
+  na_group <- as.data.frame(cier_methods())
+  na_group$vote_group[1] <- NA_character_
+  expect_error(validate_cier_method_info(new_cier_method_info(na_group)),
+               class = "cier_error_data")
+
+  blank_group <- as.data.frame(cier_methods())
+  blank_group$vote_group[1] <- ""
+  expect_error(validate_cier_method_info(new_cier_method_info(blank_group)),
                class = "cier_error_data")
 })

@@ -54,7 +54,7 @@ new_cier_method_info <- function(registry) {
 registry_columns <- function() {
   c("method", "family", "paper_year", "paper_citation_key", "doi",
     "default_cutoff_method", "default_cutoff_value", "flag_direction",
-    "companion_methods", "backend", "screenable", "notes")
+    "companion_methods", "backend", "screenable", "vote_group", "notes")
 }
 
 # Catch the realistic hand-edit mistake: a typo in a numeric/logical column
@@ -86,6 +86,12 @@ validate_registry_vocab <- function(x) {
   if (anyNA(x$flag_direction) ||
         length(setdiff(x$flag_direction, cier_flag_directions())) > 0L) {
     cier_abort("cier_error_data", "{.field flag_direction} must be upper/lower.")
+  }
+  # `vote_group` drives the screen's vote collapse; a missing label would silently
+  # drop the index from the agreement count, so every row must carry one.
+  if (anyNA(x$vote_group) || any(!nzchar(x$vote_group))) {
+    cier_abort("cier_error_data",
+               "{.field vote_group} must be a non-missing label on every row.")
   }
   invisible(NULL)
 }

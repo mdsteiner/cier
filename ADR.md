@@ -154,10 +154,17 @@ input-error tests.
 ## Method-properties registry schema
 
 The registry (`inst/extdata/method-properties.csv`) is the single source of truth
-for cutoff defaults, flag direction, backend, and screen membership. Its columns
-are `method`, `family`, `paper_year`, `paper_citation_key`, `doi`,
-`default_cutoff_method`, `default_cutoff_value`, `flag_direction`,
-`companion_methods`, `backend`, `screenable`, and `notes`. The boolean capability
+for cutoff defaults, flag direction, backend, screen membership, and the screen's
+vote grouping. Its columns are `method`, `family`, `paper_year`,
+`paper_citation_key`, `doi`, `default_cutoff_method`, `default_cutoff_value`,
+`flag_direction`, `companion_methods`, `backend`, `screenable`, `vote_group`, and
+`notes`. `vote_group` (added in the screen slice) labels the construct each index
+votes for: indices sharing a label collapse to one vote in `cier_screen()`. Only
+even-odd and personal reliability share a group (`consistency`) — they measure one
+construct, so counting them as two votes would double-count; every other index's
+`vote_group` is its own id. Keeping the grouping in the registry (rather than a
+hard-coded map) makes vote membership data-driven and validated alongside
+`screenable`. The boolean capability
 flags (`requires_*`) and the `available` column are deliberately omitted: no v0
 component reads them (each index's wrapper is the single source of truth for the
 metadata it requires), the nonparametric battery makes an IRT-model flag
@@ -255,3 +262,41 @@ uniformity with the already-vectorised `kernel_person_total` (itself `1e-12` vs
 `PerFit`, for the same summation-order reason). The kernel stays a single pure
 function shared by psychsyn (`pairing = "syn"`) and psychant (`"ant"`), so the
 antonym index inherits both the speedup and the same tolerance.
+
+## cier_screen: a transparent flag-table combiner, no single label
+
+`cier_screen()` runs the registry's screenable indices over one dataset and
+returns a `cier_screen` — the per-index flag table (`$flags`), the per-construct
+collapsed votes (`$votes`), and the cross-index agreement diagnostic
+(`$agreement`). It is an orchestrator, **not a new statistic**: every `cier_index`
+it returns is byte-identical to calling that index directly (the trust model is
+internal parity at tolerance 0, since no external package computes this combined
+screen). It deliberately produces **no single careless/not label** — the dropped
+consensus/learned-combiner machinery is out of v0 scope; the screen reports the
+count of flagged constructs and the agreement, and the researcher thresholds.
+
+Three decisions (Markus, this slice):
+
+- **Selectable indices.** `methods=` chooses which screenable indices run.
+  Goldammer et al. (2024) report resampled personal reliability as the strongest
+  single indirect indicator, so weaker indices must be off-selectable to avoid
+  diluting it; the default runs all.
+- **Redundancy collapse via the registry.** Indices sharing a `vote_group`
+  collapse to one vote = logical OR of members' flags, an abstaining (`NA`) member
+  counting as not flagged. Only even-odd and personal reliability share a group
+  (`consistency`); the agreement diagnostic and the construct count run on the
+  **collapsed** votes, never the raw per-index flags, so one construct is never
+  weighted as two independent votes. The grouping is a registry column (above),
+  not a hard-coded map.
+- **Structural skips vs propagated errors.** A metadata index when `items` is
+  `NULL`, or a `Suggests`-backed index (Gnormed/Ht) when its package is absent, is
+  **skipped with a recorded reason** (`$skipped`, items reason taking precedence).
+  A genuinely malformed `items` frame is **not** skipped — the index's own typed
+  `cier_error_input` propagates, so the wrapper stays the single source of truth
+  for the metadata it requires and the user is told to fix the data.
+
+Tuning is a per-index `control` list (named by method id, each entry an argument
+list spliced into that index's call), so any index's `fpr` / `alpha` / `cutoff` /
+`seed` / `critical_r` / `n_resamples` is reachable without widening the screen's
+own surface. The object is the robust list-based shape (not an attribute-laden
+data.frame); the flag count and rate are derived on print, never stored.
