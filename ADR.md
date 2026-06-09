@@ -300,3 +300,11 @@ list spliced into that index's call), so any index's `fpr` / `alpha` / `cutoff` 
 `seed` / `critical_r` / `n_resamples` is reachable without widening the screen's
 own surface. The object is the robust list-based shape (not an attribute-laden
 data.frame); the flag count and rate are derived on print, never stored.
+
+A small accessor `cier_flagged_cases()` (an S3 generic over `cier_index` and
+`cier_screen`) turns the agreement threshold into actionable respondent row
+indices: `cier_flagged_cases(screen, min_votes = k)` returns `which(rowSums(votes)
+>= k)` on the **collapsed** votes, so it equals the screen's "flagged by >= k
+votes" count and never double-counts the consistency construct. It returns
+positions only — no label, no exclusion — keeping the researcher in control of the
+threshold.
