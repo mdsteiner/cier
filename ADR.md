@@ -308,3 +308,39 @@ indices: `cier_flagged_cases(screen, min_votes = k)` returns `which(rowSums(vote
 votes" count and never double-counts the consistency construct. It returns
 positions only — no label, no exclusion — keeping the researcher in control of the
 threshold.
+
+## Continuous integration: the suite is the gate
+
+CI (GitHub Actions, `r-lib/actions`) runs on push / pull-request to `main`:
+
+- **`R-CMD-check`** on a lean cross-OS matrix — Ubuntu, Windows, macOS, all R
+  `release`, `--no-manual`. This validates build / install / examples / vignette
+  across platforms. The full devel/oldrel matrix is deliberately not run for this
+  pure-R package; re-add it if a release needs the wider surface.
+- **Gates live in the test suite, not in bespoke CI jobs.** The
+  no-process-vocabulary, roxygen-up-to-date, and references-DOI guards are
+  `testthat` tests. They inspect the development sources, which are absent under
+  `R CMD check` (it tests the installed package), so a dedicated Ubuntu
+  `tests-and-guards` job runs `devtools::test()` against the checked-out source
+  with `NOT_CRAN=true` (so the `skip_on_cran()` guards and snapshot tests run) and
+  `roxygen2` pinned to the recorded `RoxygenNote` (so the roxygen guard executes
+  instead of self-skipping on a version mismatch).
+- **Coverage** is reported to Codecov via `covr`; the floor is the 75% in the
+  acceptance gate (project status, patch informational). Needs a `CODECOV_TOKEN`
+  secret.
+- **No automated README-render gate.** The README embeds a live `cier_screen()`
+  chunk whose rendered output depends on the `PerFit` / `mokken` / `pandoc`
+  versions, so a bytewise render-compare guard would false-fail on dependency
+  drift (and rendering it in-process can destabilise the suite); README.md is
+  regenerated from README.Rmd by the maintainer and checked at hand-off instead.
+
+## Slow-test tier: `skip_if_slow()` opt-in
+
+A `skip_if_slow()` test helper gates slow tests on the `CIER_SLOW_TESTS`
+environment variable (default off): a normal local or CRAN run skips them; CI
+opts in by setting `CIER_SLOW_TESTS=true`. Pair it with `skip_on_cran()` so the
+tier is enforced in both directions. For the pure-R v0 battery nothing is yet
+slow enough to tag (the `PerFit` / `mokken` cross-package parity already gates on
+`skip_if_not_installed()` and runs sub-second), so the helper ships as the
+documented convention with no test tagged; tag the first genuinely slow path
+(e.g. a large-n recovery sweep) when it lands.

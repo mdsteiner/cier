@@ -8,6 +8,14 @@
 \description{
 A lean, fast toolkit for detecting careless and insufficient effort responding ('C/IER') in survey data using indirect response-pattern indices (longstring, intra-individual response variability, personal reliability, psychometric synonyms and antonyms, Mahalanobis distance, person-total correlation, and nonparametric person-fit statistics), following the indirect-index battery evaluated by Goldammer et al. (2024) \doi{10.3758/s13428-024-02484-3}. Flags respondents through an auditable, false-positive-rate-controlled layer with transparent, citable defaults.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/mdsteiner/cier}
+  \item Report bugs at \url{https://github.com/mdsteiner/cier/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Markus Steiner \email{markus.d.steiner@gmail.com} [copyright holder]
 
