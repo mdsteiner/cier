@@ -298,14 +298,10 @@ check_items_min <- function(items, reverse_keyed, n_items, arg, call) {
   mins
 }
 
-# Validate the per-item `items` frame the split-half family uses (even-odd and
-# personal reliability). `items` is a data.frame with one row per item, aligned
-# to the columns of `responses`. Returns a normalized
-# list(scale, reverse_keyed, categories, min) on success; aborts cier_error_input
-# on any malformed field. `categories` is NULL when its column is absent
-# (permitted only when nothing is reverse-keyed); `min` defaults to all-1.
-check_items <- function(items, n_items, min_scales = 2L,
-                        arg = "items", call = rlang::caller_env()) {
+# The shared item-frame precondition every items validator runs first: `items`
+# must be a data.frame with exactly one row per item (column of `responses`).
+# Returns invisibly NULL; aborts cier_error_input on a violation.
+check_items_frame <- function(items, n_items, arg, call) {
   if (!is.data.frame(items)) {
     cier_abort(
       "cier_error_input",
@@ -323,12 +319,41 @@ check_items <- function(items, n_items, min_scales = 2L,
       call = call
     )
   }
+  invisible(NULL)
+}
+
+# Validate the per-item `items` frame the split-half family uses (even-odd and
+# personal reliability). `items` is a data.frame with one row per item, aligned
+# to the columns of `responses`. Returns a normalized
+# list(scale, reverse_keyed, categories, min) on success; aborts cier_error_input
+# on any malformed field. `categories` is NULL when its column is absent
+# (permitted only when nothing is reverse-keyed); `min` defaults to all-1.
+check_items <- function(items, n_items, min_scales = 2L,
+                        arg = "items", call = rlang::caller_env()) {
+  check_items_frame(items, n_items, arg, call)
   scale <- check_items_scale(items, min_scales, arg, call)
   reverse_keyed <- check_items_reverse(items, n_items, arg, call)
   categories <- check_items_categories(items, reverse_keyed, arg, call)
   minimum <- check_items_min(items, reverse_keyed, n_items, arg, call)
   list(scale = scale, reverse_keyed = reverse_keyed,
        categories = categories, min = minimum)
+}
+
+# Validate the per-item `items` frame cier_ht() uses. Ht needs item metadata ONLY
+# to reverse-score keyed items: mokken::coefH accepts a mix of category counts and
+# the kernel never reads `categories` directly, so -- unlike the Gnormed bridge --
+# categories need not be homogeneous and are required only on reverse-keyed items
+# (so they can be reverse-scored), exactly like the split-half family but without
+# the `scale` requirement. Returns a normalized list(reverse_keyed, categories,
+# min); `categories` is NULL when its column is absent (permitted when nothing is
+# reverse-keyed) and `min` defaults to all-1.
+check_items_ht <- function(items, n_items, arg = "items",
+                           call = rlang::caller_env()) {
+  check_items_frame(items, n_items, arg, call)
+  reverse_keyed <- check_items_reverse(items, n_items, arg, call)
+  categories <- check_items_categories(items, reverse_keyed, arg, call)
+  minimum <- check_items_min(items, reverse_keyed, n_items, arg, call)
+  list(reverse_keyed = reverse_keyed, categories = categories, min = minimum)
 }
 
 # `categories` for the person-fit backends: required on EVERY item (not only
@@ -381,23 +406,7 @@ check_items_min_personfit <- function(items, n_items, arg, call) {
 # any malformed field.
 check_items_personfit <- function(items, n_items, arg = "items",
                                   call = rlang::caller_env()) {
-  if (!is.data.frame(items)) {
-    cier_abort(
-      "cier_error_input",
-      c("{.arg {arg}} must be a data.frame (one row per item).",
-        "x" = "Got {.cls {class(items)}}."),
-      data = list(arg = arg), call = call
-    )
-  }
-  if (nrow(items) != n_items) {
-    cier_abort(
-      "cier_error_input",
-      c("{.arg {arg}} must have one row per item (column of {.arg responses}).",
-        "x" = "Got {nrow(items)} item row{?s} for {n_items} column{?s}."),
-      data = list(arg = arg, observed = nrow(items), expected = n_items),
-      call = call
-    )
-  }
+  check_items_frame(items, n_items, arg, call)
   categories <- check_items_categories_homogeneous(items, arg, call)
   reverse_keyed <- check_items_reverse(items, n_items, arg, call)
   minimum <- check_items_min_personfit(items, n_items, arg, call)

@@ -1,15 +1,17 @@
-# Paper-faithful reference oracle for the normed polytomous Guttman-error
-# person-fit statistic (Gnormed) wrapped by cier_gnormed() (registry citation
-# key: niessen2016). Consumed by tests/testthat/test-cier-gnormed.R.
+# Paper-faithful reference oracles for the nonparametric person-fit C/IER
+# statistics wrapped by cier_gnormed() and cier_ht() (registry citation key:
+# niessen2016). Consumed by tests/testthat/test-cier-gnormed.R and
+# tests/testthat/test-cier-ht.R.
 #
-# This oracle is INDEPENDENT of the upstream routine (PerFit::Gnormed.poly): it
-# recomputes the statistic from its originating definition rather than from the
-# package's person-fit function. For the nonparametric Guttman-error index the
-# oracle is a pure function of the response matrix (no IRT model is fitted).
-# Ht's oracle (mokken / PerFit) joins this file when its slice lands.
+# These oracles are INDEPENDENT of the upstream routines (PerFit::Gnormed.poly,
+# mokken::coefH): they recompute each statistic from its originating definition
+# rather than from the package's scorer. Both are nonparametric -- a pure
+# function of the response matrix (no IRT model is fitted).
 #
 # References:
-#   Molenaar (1991); Emons (2008, APM) -- polytomous normed Guttman (Gnormed).
+#   Molenaar (1991); Emons (2008, APM) -- polytomous normed Guttman (Gnormed),
+#     and Molenaar's weighted Loevinger H underlying polytomous Ht.
+#   Sijtsma (1986); Sijtsma & Meijer (1992) -- Ht (person H / person scalability).
 #   Niessen, Meijer & Tendeiro (2016, JRP) -- survey C/IER orientation.
 
 # ---- PerFit: Gnormed (normed polytomous Guttman errors) --------------------
@@ -84,5 +86,54 @@ ref_personfit_gnormed_poly <- function(data, ncat = NULL) {
   res <- num / max_g[nc + 1L]
   res[is.nan(res)] <- 0
   out[complete] <- res
+  out
+}
+
+# ---- mokken: Ht polytomous (transposed Mokken scalability) -----------------
+
+# Polytomous person Ht is the item scalability of the transposed response
+# matrix (mokken::coefH(t(X))$Hi). Independent closed form: for the
+# complete-case, reverse-scored block,
+#   Ht_v = cov(x_v, Tot - x_v) / cov(sort(x_v), SortedTot - sort(x_v))
+# over items, with Tot = colSums and SortedTot = colSums of the
+# per-respondent-sorted rows. This is the bilinearity collapse of
+# sum_{w!=v} cov(X_v, X_w) / sum_{w!=v} cov_max(X_v, X_w), where cov_max is
+# the Frechet / comonotonic maximum (Hardy-Littlewood-Polya rearrangement:
+# sort both, pair). It matches mokken::coefH to ~1e-14 and reduces to the
+# dichotomous Ht (PerFit::Ht, to that package's 4-dp output rounding). Zero-
+# variance (straightline) rows and respondents with any missing cell are NA, as
+# in the production bridge; reverse-keyed items are reverse-scored first
+# (cat + 1 - x), exactly as apply_split_half_keying does on a base-1 scale.
+ref_personfit_ht_poly <- function(data, ncat = NULL) {
+  resp <- data$responses
+  rk <- data$items$reverse_keyed
+  if (any(rk)) {
+    reflect <- data$items$categories[rk] + 1L
+    resp[, rk] <- rep(reflect, each = nrow(resp)) - resp[, rk]
+  }
+  n <- nrow(resp)
+  out <- rep(NA_real_, n)
+  complete <- stats::complete.cases(resp)
+  if (sum(complete) < 2L) {
+    return(out)
+  }
+  z <- resp[complete, , drop = FALSE]
+  # Mirror the bridge's all-constant guard: < 2 non-constant complete
+  # respondents -> nothing scorable (coefH would error or return all NaN).
+  if (sum(apply(z, 1L, stats::var) > 0) < 2L) {
+    return(out)
+  }
+  z <- z - min(z)
+  s <- t(apply(z, 1L, sort))
+  tot <- colSums(z)
+  sorted_tot <- colSums(s)
+  pcov <- function(a, b) mean(a * b) - mean(a) * mean(b)
+  v <- rep(NA_real_, nrow(z))
+  for (r in seq_len(nrow(z))) {
+    if (stats::var(z[r, ]) == 0) next
+    den <- pcov(s[r, ], sorted_tot - s[r, ])
+    if (den != 0) v[r] <- pcov(z[r, ], tot - z[r, ]) / den
+  }
+  out[complete] <- v
   out
 }

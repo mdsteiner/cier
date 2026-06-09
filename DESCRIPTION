@@ -29,6 +29,7 @@ Imports:
 Suggests:
     callr,
     careless,
+    mokken,
     PerFit,
     psych,
     roxygen2,

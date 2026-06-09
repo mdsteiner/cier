@@ -113,5 +113,8 @@ scaling to multicategory items. \emph{Kwantitatieve Methoden}, 12(37), 97–117.
 }
 \seealso{
 \code{\link[PerFit:Gnormed.poly]{PerFit::Gnormed.poly()}}, \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}}
+
+Other person-fit indices:
+\code{\link[=cier_ht]{cier_ht()}}
 }
 \concept{person-fit indices}

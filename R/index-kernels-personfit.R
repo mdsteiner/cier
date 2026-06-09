@@ -1,12 +1,13 @@
-# Purpose: PerFit-backed kernels for the nonparametric person-fit indices. The
-#          normed polytomous Guttman-error index (Gnormed) lives here; the
-#          person-scalability index (Ht) will join it. Unlike the pure indirect
-#          kernels (R/index-kernels-indirect.R), a bridge kernel here MAY raise a
-#          typed condition on a data/contract violation (an out-of-range
-#          zero-base) and needs the fitted PerFit object to resolve its
-#          Monte-Carlo null cutoff -- the documented exception to the value-only
-#          resolve_cutoff() path (see ADR.md, "Gnormed cutoff: PerFit Monte-Carlo
-#          null").
+# Purpose: External-backend kernels for the nonparametric person-fit indices: the
+#          normed polytomous Guttman-error index (Gnormed, PerFit) and the
+#          polytomous person-scalability index (Ht, mokken). Unlike the pure
+#          indirect kernels (R/index-kernels-indirect.R), a bridge kernel here MAY
+#          raise a typed condition on a data/contract violation (an out-of-range
+#          zero-base, a fractional response) and Gnormed needs the fitted PerFit
+#          object to resolve its Monte-Carlo null cutoff -- the documented
+#          exception to the value-only resolve_cutoff() path (see ADR.md, "Gnormed
+#          cutoff: PerFit Monte-Carlo null"). Ht uses the plain percentile path
+#          (no model-conforming null exists for the mokken polytomous statistic).
 # Args:    See per-function documentation.
 # Returns: Documented per function.
 # Invariants:
@@ -19,33 +20,43 @@
 #   - The Monte-Carlo null cutoff is reproducible: a non-NULL seed is applied
 #     LOCALLY and the caller's .Random.seed is restored on exit.
 
+# Assert that a (reverse-keyed) response matrix carries whole-number category
+# codes. The person-fit kernels cast to integer before scoring; check_responses()
+# only rejects NaN/Inf, so a fractional cell (e.g. an averaged or imputed value)
+# would otherwise be silently TRUNCATED (2.5 -> 2) into a wrong score. Raising a
+# typed cier_error_input here -- on the FULL matrix (NA cells ignored) and before
+# any abstention short-circuit -- surfaces the contract violation regardless of
+# whether the data would otherwise be scorable. Reverse-keying and zero-basing are
+# integer-exact, so this fires only on genuinely fractional input, never on
+# floating-point noise. `statistic` names the index in the message (Gnormed / Ht).
+# Shared by kernel_gnormed and kernel_ht (single source of the categorical-codes
+# contract).
+assert_integer_responses <- function(responses, statistic, call) {
+  if (any(responses != round(responses), na.rm = TRUE)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg responses} must be whole-number category codes for {statistic}.",
+        "x" = "Found a fractional response value.",
+        "i" = "{statistic} scores categorical responses; recode or drop \\
+               non-integer cells (it does not accept averaged or imputed \\
+               fractional scores)."),
+      data = list(arg = "responses"), call = call
+    )
+  }
+  invisible(responses)
+}
+
 # Recode a (reverse-scored) complete-case response block to PerFit's 0..(Ncat-1)
 # contract by subtracting the per-item scale base `mins` (default 1) and check the
 # two preconditions PerFit::Gnormed.poly enforces (its Sanity.dma.poly): every
 # cell must lie in 0..(Ncat-1), AND the block must ATTAIN both extremes (its
 # popularity estimates are undefined if the lowest or highest category never
-# occurs). The caller passes a complete-case block, so there are no NAs. Either
+# occurs). The caller passes a complete-case block, so there are no NAs; the
+# whole-number contract is enforced earlier by assert_integer_responses(). Either
 # violation is a typed cier_error_input -- converting PerFit's terse abort into a
 # package condition -- rather than a silent shift or a cryptic upstream stop().
 personfit_zero_base <- function(block, mins, ncat, call) {
   m <- sweep(block, 2L, mins)
-  # Gnormed scores categorical responses; a fractional cell is a contract
-  # violation. check_responses() only rejects NaN/Inf, and the integer cast below
-  # would TRUNCATE a fractional value silently (2.5 -> 2) -- and PerFit, which
-  # would itself reject a non-integer matrix, never sees the original. Catch it
-  # here as a typed error instead of a silent wrong score. (Reverse-keying and
-  # zero-basing are integer-exact, so this only fires on genuinely fractional
-  # input, never on floating-point noise.)
-  if (any(m != round(m))) {
-    cier_abort(
-      "cier_error_input",
-      c("{.arg responses} must be whole-number category codes for Gnormed.",
-        "x" = "Found a fractional response value.",
-        "i" = "Gnormed scores categorical responses; recode or drop non-integer \\
-               cells (it does not accept averaged or imputed fractional scores)."),
-      data = list(arg = "responses"), call = call
-    )
-  }
   rng <- range(m)
   if (rng[[1L]] < 0L || rng[[2L]] > ncat - 1L) {
     cier_abort(
@@ -87,6 +98,10 @@ personfit_zero_base <- function(block, mins, ncat, call) {
 kernel_gnormed <- function(responses, categories, mins, call) {
   n <- nrow(responses)
   value <- rep(NA_real_, n)
+  # The whole-number contract is checked first, so a fractional cell surfaces a
+  # typed error even when the data would otherwise abstain (cf. the abstention
+  # short-circuits below).
+  assert_integer_responses(responses, "Gnormed", call)
   if (ncol(responses) < 3L) {
     return(list(value = value, fit = NULL))
   }
@@ -140,4 +155,48 @@ resolve_gnormed_cutoff <- function(fit, fpr, cutoff, default_fpr, seed,
     return(NA_real_)
   }
   resolve_perfit_null_cutoff(fit, if (is.null(fpr)) default_fpr else fpr, seed)
+}
+
+# Per-respondent polytomous person-scalability Ht via mokken::coefH on the
+# TRANSPOSED complete-case block (item scalability in person space). `responses`
+# has already been reverse-keyed by the wrapper. Returns a full-length numeric
+# vector: NA for any respondent with a missing cell; all NA when there are fewer
+# than two items (person scalability is undefined on a single item), fewer than
+# two complete respondents, or fewer than two of the complete respondents have
+# response variance (an all-constant block errors inside coefH or returns
+# all-NaN); and NA for a complete straightliner (a zero-variance row is
+# unscalable, so coefH returns NaN). Ht is a covariance ratio bounded in [-1, 1]
+# (the Frechet bound). The complete block is globally zero-based and cast to
+# integer before coefH, whose printed coefficient matrices are captured. A
+# fractional cell is a contract violation -- the integer cast would truncate it
+# silently -- so assert_integer_responses() raises a typed cier_error_input first,
+# before any abstention short-circuit.
+kernel_ht <- function(responses, call = rlang::caller_env()) {
+  n <- nrow(responses)
+  value <- rep(NA_real_, n)
+  assert_integer_responses(responses, "Ht", call)
+  # Person scalability needs >= 2 items: with a single column the per-row
+  # variance below is NA, which would turn the guard into `if (NA)` (an untyped
+  # error) rather than a clean abstention -- so abstain here first.
+  if (ncol(responses) < 2L) {
+    return(value)
+  }
+  complete <- stats::complete.cases(responses)
+  if (sum(complete) < 2L) {
+    return(value)
+  }
+  z <- responses[complete, , drop = FALSE]
+  if (sum(apply(z, 1L, stats::var) > 0) < 2L) {
+    return(value)
+  }
+  z <- z - min(z)
+  storage.mode(z) <- "integer"
+  utils::capture.output(
+    res <- suppressWarnings(mokken::coefH(t(z), se = FALSE))
+  )
+  hi <- res$Hi
+  v <- as.numeric(if (is.null(dim(hi))) hi else hi[, 1L])
+  v[!is.finite(v)] <- NA_real_     # straightliner zero-variance rows -> NaN -> NA
+  value[complete] <- v
+  value
 }

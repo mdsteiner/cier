@@ -58,6 +58,9 @@ parity check.
 | gnormed | vs `PerFit::Gnormed.poly` direct call (complete, non-keyed, n != p) | 0 (bytewise) | `PerFit` (1.4.7) |
 | gnormed | reduces to dichotomous `PerFit::Gnormed` at `Ncat = 2` | 1e-9 (obs 0) | `PerFit` (1.4.7) |
 | gnormed | Monte-Carlo null cutoff vs `PerFit::cutoff(fit, Blvl)$Cutoff`, same seed | 0 (bytewise) | `PerFit` (1.4.7) |
+| ht | per-row value vs independent oracle `ref_personfit_ht_poly` | 1e-12 (obs ~5e-16) | `ref-personfit-niessen-2016.R` |
+| ht | vs hand-built `mokken::coefH(t(zero_base(m)))$Hi` (complete, non-keyed, n != p) | 0 (bytewise) | `mokken` (3.1.2) |
+| ht | reduces to dichotomous `PerFit::Ht` at `Ncat = 2` | 1e-4 (obs 4.8e-5) | `PerFit` (4-dp output rounding) |
 
 Personal reliability (PR / RPR) has **no cross-package partner**: `careless`,
 `psych`, `PerFit`, and `mokken` implement neither variant. The two independent
@@ -103,6 +106,24 @@ randomised but **reproducible under a seed**; the parity re-fits the same
 zero-based block and seeds identically immediately before the call, so it matches
 bytewise (the statistic is independent; only the RNG stream is coordinated -- the
 same white-box reproducibility constraint as RPR, not a tautology).
+
+Ht's production scorer **is** `mokken::coefH(t(z))$Hi` (single-kernel rule), so
+its genuine independent check is the closed-form oracle `ref_personfit_ht_poly`
+(the Frechet / rearrangement collapse of person scalability, re-derived from
+scratch and never calling the production kernel). `coefH` returns full precision
+(unlike `PerFit`'s 4-dp rounding), so the oracle holds to ~5e-16 -- recorded at
+**1e-12**. The hand-built `mokken::coefH(t(.))` row is not a redundant scorer
+check: it pins the bridge's persons-as-rows orientation (the transpose), so an
+`n != p` fixture makes a missing-transpose mutant (`coefH(z)`, item scalability)
+return the wrong length while the shared scorer holds it **bytewise**. (Global
+zero-basing is translation-invariant for the covariance-based Ht, so it does not
+need a dedicated parity row -- the oracle exercises the remaining preprocessing.)
+The dichotomous-reduction row checks that the polytomous `coefH` path reduces to
+the classic Ht at `Ncat = 2`, matching `PerFit::Ht` to that package's 4-dp output
+rounding (**1e-4**, observed 4.8e-5). Unlike Gnormed, Ht has **no Monte-Carlo
+null** row: no model-conforming null exists for the mokken-backed polytomous
+statistic, so its cutoff is the empirical lower-tail percentile (`stats::quantile`,
+already covered by the slice-1 cutoff rows).
 
 ## How to use this table
 
