@@ -8,13 +8,17 @@ paper or a trusted package.
 
 ## Scope (HARD boundary)
 
-v0 ships exactly these indices: personal reliability (PR + resampled RPR),
-psychometric synonyms, psychometric antonyms, Mahalanobis distance, person-total
-(r_pbis), the nonparametric person-fit statistics Gnormed (`PerFit`) and Ht
-(`mokken`), plus the classics longstring and IRV. Nothing else. A new method
-family (timing, IRT person-fit, model-based, ML), a learned combiner, simulation,
-spec-curve, or a report generator each needs an `ADR.md` entry + Markus's sign-off
-**before** any code.
+The v0 battery is exactly these ten indices: personal reliability (PR + resampled
+RPR), psychometric synonyms, psychometric antonyms, Mahalanobis distance,
+person-total (r_pbis), the nonparametric person-fit statistics Gnormed (`PerFit`)
+and Ht (`mokken`), plus the classics longstring and IRV. **v0.2** (ADR-signed off
+2026-06-10) adds five published, cheap, oracle-able indices: `cier_autocorrelation`
+and `cier_lazr` (indirect pattern), `cier_total_time` and `cier_page_time` (new
+timing family), and `cier_attention` (new direct family). Nothing else. A further
+method family (IRT person-fit, model-based, ML), a learned combiner (including the
+post-study `cier_recommended()` bundle support), simulation, spec-curve, or a
+report generator each needs an `ADR.md` entry + Markus's sign-off **before** any
+code.
 
 ## Anatomy of a method
 

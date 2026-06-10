@@ -35,6 +35,7 @@ Suggests:
     mokken,
     PerFit,
     psych,
+    responsePatterns,
     rmarkdown,
     roxygen2,
     testthat (>= 3.0.0),

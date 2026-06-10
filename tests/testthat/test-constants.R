@@ -1,8 +1,9 @@
 # Controlled-vocabulary accessors (R/constants.R), trimmed to what the
 # registry loader/validator pin against.
 
-test_that("family vocabulary is the v0 set", {
-  expect_identical(cier_family_levels(), c("indirect", "personfit"))
+test_that("family vocabulary is the v0.2 set", {
+  expect_identical(cier_family_levels(),
+                   c("indirect", "personfit", "timing", "direct"))
 })
 
 test_that("cutoff-method vocabulary is the v0 set", {

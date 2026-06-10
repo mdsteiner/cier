@@ -8,9 +8,11 @@
 #   - Level sets are class-stable; the registry validator relies on identity.
 #   - Accessors are pure (return a copy each call, no side effects).
 
-# Method families spanned by the v0 indices.
+# Method families spanned by the indices. v0.2 adds the timing family (total /
+# page time) and the direct family (attention checks); autocorrelation and Laz.R
+# remain indirect (response-pattern) indices.
 cier_family_levels <- function() {
-  c("indirect", "personfit")
+  c("indirect", "personfit", "timing", "direct")
 }
 
 # Cutoff resolution strategies used by the registry. "perfit_null" is the

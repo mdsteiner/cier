@@ -158,7 +158,8 @@ load_method_registry <- function() {
 #' The registry is the single source of truth behind the index functions; this
 #' accessor is read-only. Columns:
 #' - `method`: the index function name (also the id for `cier_screen(methods=)`).
-#' - `family`: `"indirect"` (response-pattern) or `"personfit"`.
+#' - `family`: `"indirect"` (response-pattern), `"personfit"`, `"timing"`, or
+#'   `"direct"`.
 #' - `paper_year`, `paper_citation_key`, `doi`: the source paper the default is
 #'   traced to.
 #' - `default_cutoff_method` / `default_cutoff_value`: how the default cutoff is

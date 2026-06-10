@@ -22,7 +22,8 @@ The registry is the single source of truth behind the index functions; this
 accessor is read-only. Columns:
 \itemize{
 \item \code{method}: the index function name (also the id for \code{cier_screen(methods=)}).
-\item \code{family}: \code{"indirect"} (response-pattern) or \code{"personfit"}.
+\item \code{family}: \code{"indirect"} (response-pattern), \code{"personfit"}, \code{"timing"}, or
+\code{"direct"}.
 \item \code{paper_year}, \code{paper_citation_key}, \code{doi}: the source paper the default is
 traced to.
 \item \code{default_cutoff_method} / \code{default_cutoff_value}: how the default cutoff is

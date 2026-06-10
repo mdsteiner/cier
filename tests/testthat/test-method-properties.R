@@ -8,41 +8,55 @@ registry_schema_columns <- function() {
     "companion_methods", "backend", "screenable", "vote_group", "notes")
 }
 
-# The ten v0 rows with their behaviourally-binding fields (the spec).
+# The fifteen rows with their behaviourally-binding fields (the spec): the ten
+# v0 indices, then the five v0.2 additions (autocorrelation, lazr, total / page
+# time, attention). The v0.2 rows ship screenable = FALSE -- the screen wiring is
+# deferred until the study has measured redundancy -- so they register metadata
+# without entering cier_screen()'s run set.
 expected_registry <- function() {
   data.frame(
     method = c(
       "cier_longstring", "cier_irv", "cier_even_odd",
       "cier_personal_reliability", "cier_psychsyn", "cier_psychant",
-      "cier_mahalanobis", "cier_person_total", "cier_gnormed", "cier_ht"
+      "cier_mahalanobis", "cier_person_total", "cier_gnormed", "cier_ht",
+      "cier_autocorrelation", "cier_lazr", "cier_total_time",
+      "cier_page_time", "cier_attention"
     ),
-    family = c(rep("indirect", 8L), "personfit", "personfit"),
+    family = c(rep("indirect", 8L), "personfit", "personfit",
+               "indirect", "indirect", "timing", "timing", "direct"),
     default_cutoff_method = c(
       "fixed", "percentile", "percentile", "percentile", "percentile",
-      "percentile", "chisq", "percentile", "perfit_null", "percentile"
+      "percentile", "chisq", "percentile", "perfit_null", "percentile",
+      "percentile", "percentile", "percentile", "fixed", "fixed"
     ),
     # Percentile rows store the false-positive tail mass (fpr) uniformly; the
     # flag_direction picks the tail and resolve_cutoff applies the single flip.
     # Gnormed uses the PerFit Monte-Carlo null (perfit_null); its value is the
-    # nominal level (Blvl). Ht keeps percentile until its slice lands.
+    # nominal level (Blvl). page_time / attention use a fixed cited count (1).
     default_cutoff_value = c(0.5, 0.05, 0.05, 0.05, 0.05, 0.05, 0.001, 0.05,
-                             0.05, 0.05),
+                             0.05, 0.05, 0.05, 0.05, 0.05, 1, 1),
     flag_direction = c("upper", "lower", "upper", "upper", "lower", "upper",
-                       "upper", "lower", "upper", "lower"),
-    backend = c(rep(NA_character_, 8L), "PerFit", "mokken"),
+                       "upper", "lower", "upper", "lower",
+                       "upper", "upper", "lower", "upper", "upper"),
+    backend = c(rep(NA_character_, 8L), "PerFit", "mokken",
+                rep(NA_character_, 5L)),
     # even-odd and personal_reliability share the `consistency` vote so they
     # collapse to ONE vote in cier_screen(); every other index is its own vote.
+    # The v0.2 rows keep own-id votes (the "repetition" grouping is deferred).
     vote_group = c("cier_longstring", "cier_irv", "consistency", "consistency",
                    "cier_psychsyn", "cier_psychant", "cier_mahalanobis",
-                   "cier_person_total", "cier_gnormed", "cier_ht"),
+                   "cier_person_total", "cier_gnormed", "cier_ht",
+                   "cier_autocorrelation", "cier_lazr", "cier_total_time",
+                   "cier_page_time", "cier_attention"),
+    screenable = c(rep(TRUE, 10L), rep(FALSE, 5L)),
     stringsAsFactors = FALSE
   )
 }
 
-test_that("the registry loads as a 10-row, 13-column object and caches", {
+test_that("the registry loads as a 15-row, 13-column object and caches", {
   reg <- cier_methods()
   expect_s3_class(reg, "cier_method_info")
-  expect_identical(nrow(reg), 10L)
+  expect_identical(nrow(reg), 15L)
   expect_identical(names(reg), registry_schema_columns())
   expect_setequal(reg$method, expected_registry()$method)
   expect_identical(cier_methods(), reg)
@@ -64,7 +78,17 @@ test_that("each row's behaviourally-binding fields match the spec", {
   expect_identical(reg$flag_direction, exp$flag_direction)
   expect_identical(reg$backend, exp$backend)
   expect_identical(reg$vote_group, exp$vote_group)
-  expect_true(all(reg$screenable))
+  expect_identical(reg$screenable, exp$screenable)
+})
+
+test_that("the v0.2 additions ship screenable = FALSE (screen wiring deferred)", {
+  reg <- cier_methods()
+  v02 <- c("cier_autocorrelation", "cier_lazr", "cier_total_time",
+           "cier_page_time", "cier_attention")
+  # The five new indices register metadata but stay OUT of the screen's run set
+  # until the study has measured redundancy; the ten v0 indices remain screenable.
+  expect_false(any(reg$screenable[reg$method %in% v02]))
+  expect_true(all(reg$screenable[!reg$method %in% v02]))
 })
 
 test_that("the consistency construct collapses even-odd + personal_reliability", {
@@ -79,7 +103,9 @@ test_that("the consistency construct collapses even-odd + personal_reliability",
 
 test_that("person-fit backends are PerFit (Gnormed) and mokken (Ht)", {
   reg <- cier_methods()
-  expect_length(reg$method[is.na(reg$backend)], 8L)
+  # Only Gnormed (PerFit) and Ht (mokken) carry a backend; the other 13 rows
+  # (8 v0 indirect + 5 v0.2 additions) are base-R and have NA backend.
+  expect_length(reg$method[is.na(reg$backend)], 13L)
   expect_identical(reg$backend[reg$method == "cier_gnormed"], "PerFit")
   expect_identical(reg$backend[reg$method == "cier_ht"], "mokken")
 })
@@ -102,7 +128,7 @@ test_that("the validator catches realistic registry-edit mistakes", {
   expect_error(validate_cier_method_info(wrong_cols), class = "cier_error_data")
 
   bad_family <- as.data.frame(cier_methods())
-  bad_family$family[1] <- "timing"
+  bad_family$family[1] <- "model_based"   # outside the family vocabulary
   expect_error(validate_cier_method_info(new_cier_method_info(bad_family)),
                class = "cier_error_data")
 

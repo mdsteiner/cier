@@ -8,14 +8,81 @@ message. New entries are added as such decisions are made during the build.
 
 ## Scope boundary
 
-cier ships the indirect, response-pattern C/IER indices evaluated by Goldammer
-et al. (2024): personal reliability (including the resampled variant),
+The v0 battery is the indirect, response-pattern C/IER indices evaluated by
+Goldammer et al. (2024): personal reliability (including the resampled variant),
 psychometric synonyms and antonyms, Mahalanobis distance, person-total
 correlation, the nonparametric person-fit statistics Gnormed and Ht, and the
-classic longstring and intra-individual response variability indices. Adding any
-further method family (timing, IRT person-fit, model-based, machine-learning), a
-learned combiner, a simulation engine, a specification-curve tool, or a report
-generator requires a new entry here and explicit sign-off before code.
+classic longstring and intra-individual response variability indices.
+
+**v0.2 amendment (signed off 2026-06-10).** The boundary is extended to add five
+published, cheap, oracle-able indices the bundle study needs on real data:
+
+- `cier_autocorrelation` (indirect; Gottfried et al. 2022, PARE 27(2)) -- max
+  absolute lag autocorrelation; targets the repetitive / periodic patterns the
+  consistency family abstains on.
+- `cier_lazr` (indirect; Biemann et al. 2025, ORM) -- first-order Markov response
+  predictability; generalises longstring.
+- `cier_total_time` (new **timing** family; Ward & Meade 2023; Huang et al. 2012)
+  -- total completion time; the strongest single index on fully-careless cells.
+- `cier_page_time` (timing; Bowling et al. 2023, ORM) -- count of pages faster
+  than 2 s per item; catches within-survey speeding bursts total time misses.
+- `cier_attention` (new **direct** family; Meade & Craig 2012; Goldammer et al.
+  2024) -- count of failed instructed / bogus / infrequency checks.
+
+Explicitly **out** (each evaluated study-side or excluded by prior evidence, not
+shipped): the repetition index (the study calls `responsePatterns::rp.patterns()`
+directly; archive evidence has it tracking Laz.R within ~.03 and it was the
+archive's worst CPU hotspot), Stan time mixtures (archive measured AUC identical
+to plain total time at MCMC cost), IRT person-fit / INDCHI / ML classifiers (weak
+or below-chance on multi-scale real data, or label-dependent), self-report effort
+**as an index** (a single user-thresholded column needs no statistic; it is a
+label channel in the study), and the missingness / omission rate (one line of
+base R, documented in the vignette not shipped).
+
+Adding any further method family (IRT person-fit, model-based, machine-learning),
+a learned combiner (including the post-study `cier_recommended()` bundle support),
+a simulation engine, a specification-curve tool, or a report generator still
+requires a new entry here and explicit sign-off before code.
+
+## v0.2 index additions: families, cutoffs, deviations
+
+The five v0.2 rows register metadata only; the wrappers land in later,
+separately signed-off steps. The registry-encoded decisions and the deliberate
+deviations from the source papers and the archived previous version:
+
+- **Families.** Autocorrelation and Laz.R stay `indirect` (response-pattern
+  indices); `timing` (total / page time) and `direct` (attention) are new family
+  vocabulary levels (`cier_family_levels()`).
+- **Screen wiring deferred.** All five ship `screenable = FALSE` with own-id vote
+  groups, so the default `cier_screen()` run set is unchanged (the ten v0
+  indices). The eventual "repetition" vote group (autocorrelation + Laz.R +
+  longstring measure one construct) and the screen's `times` / `pages` / `checks`
+  arguments are a post-study decision, not made here.
+- **Corrected Gottfried DOI.** The archived registry cited the wrong DOI
+  (`10.1177/00131644211046302`, an EPM DOI) for autocorrelation; the correct
+  source is PARE 27(2), `10.7275/vyxb-gt24`.
+- **Autocorrelation cutoff.** Empirical upper percentile -- this is the paper's
+  *own* relative-ranking recommendation, so it is **not** a divergence.
+- **Laz.R cutoff.** Empirical upper percentile, a **deliberate divergence** from
+  Biemann et al.'s sample-specific Kneedle elbow: it is consistent with cier's
+  single-`fpr`-knob ranking convention, and the score's documented
+  sequence-length dependence makes an absolute cutoff indefensible. The study
+  separately evaluates a paper-faithful Kneedle variant; the package may adapt.
+- **Laz.R missing-data convention.** Whether NA is an extra Markov state
+  (paper-faithful) or dropped from the transition counts (archive) is a kernel
+  decision **deferred to the Laz.R wrapper's** numerically-delicate sign-off
+  (evaluate first). The registry row does not encode it.
+- **Total-time cutoff.** `percentile`, lower tail, fpr 0.05 -- the uniform knob,
+  a divergence from the archive's stricter 0.01. A third mutually-exclusive
+  cutoff override `frac_median` (flag respondents faster than a fraction of the
+  sample median; Leiner 2019 RSI; Greszki et al. 2015) -- extending the two-knob
+  override pattern to three for this index -- is recorded here as forthcoming and
+  is built in the total-time wrapper, not now.
+- **Attention citation.** The row cites Meade & Craig (2012), `10.1037/a0028085`
+  (the foundational attention-check source, already a registered DOI); Goldammer
+  et al. (2024) is named in the row notes, so the attention wrapper's help page
+  cites it without a `\doi` (the references-DOI guard only constrains DOIs that
+  appear in a references block).
 
 ## Cutoff philosophy
 

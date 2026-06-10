@@ -165,6 +165,11 @@ test_that("the default selection runs every screenable index", {
   sc <- q(cier_screen(x, it, control = list(cier_gnormed = list(seed = 1))))
   expect_identical(length(sc$indices), 10L)
   expect_identical(nrow(sc$skipped), 0L)
+  # The v0.2 additions ship screenable = FALSE, so they never enter the run set
+  # (no behaviour change to the default screen).
+  v02 <- c("cier_autocorrelation", "cier_lazr", "cier_total_time",
+           "cier_page_time", "cier_attention")
+  expect_false(any(v02 %in% names(sc$indices)))
 })
 
 test_that("an unknown method id is a typed input error", {
