@@ -92,6 +92,7 @@ responses in survey data. \emph{Journal of Experimental Social Psychology}, 66,
 \code{\link[PerFit:r.pbis]{PerFit::r.pbis()}}, \code{\link[=cier_mahalanobis]{cier_mahalanobis()}}, \code{\link[=cier_irv]{cier_irv()}}
 
 Other indirect indices:
+\code{\link[=cier_autocorrelation]{cier_autocorrelation()}},
 \code{\link[=cier_even_odd]{cier_even_odd()}},
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_longstring]{cier_longstring()}},

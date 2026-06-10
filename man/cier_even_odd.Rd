@@ -112,6 +112,7 @@ University Park, PA.
 \code{\link[careless:evenodd]{careless::evenodd()}}, \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}}
 
 Other indirect indices:
+\code{\link[=cier_autocorrelation]{cier_autocorrelation()}},
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_longstring]{cier_longstring()}},
 \code{\link[=cier_mahalanobis]{cier_mahalanobis()}},

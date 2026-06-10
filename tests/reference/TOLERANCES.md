@@ -134,8 +134,8 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 
 | Index | Quantity | Target tolerance | Reference |
 |---|---|---:|---|
-| autocorrelation | per-row max abs lag autocorrelation vs hand-rolled lagged-`cor()` oracle | 1e-10 (stub) | `ref-autocorrelation-gottfried2022.R` |
-| autocorrelation | vs `responsePatterns::rp.acors()` | 1e-10 (stub) | `responsePatterns` (0.1.1) |
+| autocorrelation | per-row max abs lag autocorrelation vs hand-rolled lagged-`cor()` oracle | 1e-10 | `ref-autocorrelation-gottfried2022.R` |
+| autocorrelation | vs `responsePatterns::rp.acors()` on complete data (`na_rm = FALSE`) | 1e-10 | `responsePatterns` (0.1.1) |
 | lazr | per-row Laz.R (Eq. 3) vs hand-rolled oracle; footnote-2 `Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3`, John worked example 33/49, straightliner = 1.0 | 0 / 1e-15 (stub) | `ref-lazr-biemann2025.R` |
 | total_time | identity on a validated seconds vector vs trivial oracle | 0 (stub) | oracle-only |
 | page_time | rapid-page count vs counting-rule oracle | 0 (stub) | oracle-only |
@@ -143,11 +143,17 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 
 Autocorrelation has a CRAN parity partner (`responsePatterns::rp.acors()`), but
 it is the *authors' own* implementation, so the independent oracle is a
-hand-rolled lagged-`cor()` re-derivation. `responsePatterns` 0.1.1 has a verified
-NA-guard crash (its guard tests `var(row1)` twice and never `var(row2)`, so an
-all-NA tail with a large lag aborts the whole call); cier's kernel fixes this, so
-the parity fixtures must avoid that region and the deviation is recorded with the
-autocorrelation wrapper. Laz.R, total time, page time, and attention have **no**
+hand-rolled lagged-`cor()` re-derivation. `responsePatterns` 0.1.1 has **two**
+verified NA bugs that cier deliberately avoids: (1) its NA guard tests
+`var(row1)` twice and never `var(row2)`, so an all-NA row2 slice with a large lag
+aborts the whole call; and (2) under `na.rm = TRUE` it strips the row's NAs but
+still slices with the *original* column width, over-indexing past the compacted
+vector. cier's kernel handles missingness pairwise (matching `responsePatterns`
+0.3.x), so the cross-package parity is pinned **only on complete data with
+`na_rm = FALSE`** — where the buggy regions are never reached and the two
+implementations agree to 1e-10 (vectorised masked-sum vs per-row `cor()`). The
+`na_rm = TRUE` path and any NA-bearing data are **oracle-only** trust, like
+PR / RPR. Laz.R, total time, page time, and attention have **no**
 external parity partner (verified 2026-06-10: no CRAN package implements Laz.R,
 and the timing / direct counting rules are trivial) -- they are oracle-only trust
 like PR / RPR.

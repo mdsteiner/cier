@@ -90,6 +90,7 @@ criterion for multivariate outliers via Mahalanobis distance.)
 \code{\link[careless:mahad]{careless::mahad()}}, \code{\link[psych:outlier]{psych::outlier()}}
 
 Other indirect indices:
+\code{\link[=cier_autocorrelation]{cier_autocorrelation()}},
 \code{\link[=cier_even_odd]{cier_even_odd()}},
 \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_longstring]{cier_longstring()}},
