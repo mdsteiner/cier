@@ -203,7 +203,14 @@ screen_index_lines <- function(x) {
   body <- vapply(names(x$indices), function(m) {
     n_flagged <- sum(x$flags[[m]], na.rm = TRUE)
     n_scored <- sum(!is.na(x$indices[[m]]$value))
-    pct <- if (n_scored > 0L) sprintf("%.1f", 100 * n_flagged / n_scored) else "--"
+    # round() in R before sprintf: keep the %.1f digit platform-stable on a
+    # value that could sit one ulp from a rounding boundary (see
+    # screen_agreement_lines()).
+    pct <- if (n_scored > 0L) {
+      sprintf("%.1f", round(100 * n_flagged / n_scored, 1))
+    } else {
+      "--"
+    }
     grp <- if (identical(x$vote_group[[m]], "consistency")) "  [consistency]" else ""
     sprintf("  %-26s %d / %d (%s%%)%s", m, n_flagged, n_scored, pct, grp)
   }, character(1L), USE.NAMES = FALSE)
@@ -220,6 +227,13 @@ screen_index_lines <- function(x) {
 # tail P(count >= observed) falls below 0.05 -- a descriptive guard against
 # advertising pure sampling noise as contamination, not a formal calibrated
 # test (the per-k rows are also not independent of each other).
+#
+# The displayed percentages are pre-rounded with `round(., 1)` (R's
+# platform-independent rounding) BEFORE sprintf: a Poisson-binomial `expected`
+# can land one ulp from a `%.1f` boundary (e.g. 0.2500000000000001%), where the
+# C library's own sprintf rounding diverges across platforms (Windows -> "0.2",
+# glibc -> "0.3") and breaks the print snapshot bytewise. Rounding in R first
+# makes the formatted digit identical everywhere.
 screen_agreement_lines <- function(agreement, n) {
   if (is.null(agreement)) {
     return(character(0L))
@@ -231,7 +245,7 @@ screen_agreement_lines <- function(agreement, n) {
     mark <- if (tail_p < 0.05) "  <- excess" else ""
     sprintf("  flagged by >= %d vote%s: %d / %d (%.1f%%); expected %.1f%%%s",
             ag$k[i], if (ag$k[i] == 1L) "" else "s", obs_n, n,
-            100 * ag$observed[i], 100 * ag$expected[i], mark)
+            round(100 * ag$observed[i], 1), round(100 * ag$expected[i], 1), mark)
   }, character(1L))
   c("", "Cross-index agreement (observed vs independence baseline):", body)
 }

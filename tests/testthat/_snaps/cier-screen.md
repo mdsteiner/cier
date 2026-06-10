@@ -46,7 +46,7 @@
       
       Cross-index agreement (observed vs independence baseline):
         flagged by >= 1 vote: 6 / 60 (10.0%); expected 9.8%
-        flagged by >= 2 votes: 0 / 60 (0.0%); expected 0.2%
+        flagged by >= 2 votes: 0 / 60 (0.0%); expected 0.3%
         flagged by >= 3 votes: 0 / 60 (0.0%); expected 0.0%
         flagged by >= 4 votes: 0 / 60 (0.0%); expected 0.0%
         flagged by >= 5 votes: 0 / 60 (0.0%); expected 0.0%
