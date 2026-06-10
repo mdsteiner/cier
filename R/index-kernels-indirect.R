@@ -216,12 +216,12 @@ spearman_brown_clamp <- function(r) {
 # wrappers call it. Strict no-op (returns `responses` unchanged) when no item is
 # reverse-keyed -- preserving the bytewise careless parity of no-reverse data --
 # and NA-preserving. Each reverse item is reflected with the self-inverse
-# (min + max) - x, where max = min + categories - 1 and min is the scale base
-# (items$min, default 1 -> the classic (categories + 1) - x for 1..categories
+# (min + max) - x, where max is the largest response option (items$max) and min
+# the scale base (items$min, default 1 -> the classic (max + 1) - x for 1..max
 # coding); declaring a 0-based or bipolar base keeps the reflection on the same
 # range. In the wrapper path `items` has been validated by check_items()
-# (categories present and non-NA, min finite/whole on every reverse item, min
-# defaulted to 1); the categories and min guards below are defensive backstops for
+# (max present and non-NA, min finite/whole on every reverse item, min
+# defaulted to 1); the max and min guards below are defensive backstops for
 # direct callers, keeping the single-kernel reuse path safe. The observed-range
 # cross-check below is NOT a backstop: type-valid metadata can still contradict
 # the data, which only the data can reveal.
@@ -230,14 +230,14 @@ apply_split_half_keying <- function(responses, items, call = rlang::caller_env()
   if (!any(rk)) {
     return(responses)
   }
-  cats <- items$categories
-  if (is.null(cats) || anyNA(cats[rk])) {
-    offending <- if (is.null(cats)) which(rk) else which(rk & is.na(cats))
+  maxs <- items$max
+  if (is.null(maxs) || anyNA(maxs[rk])) {
+    offending <- if (is.null(maxs)) which(rk) else which(rk & is.na(maxs))
     cier_abort(
       "cier_error_input",
-      c("Reverse-keyed items need a known {.field categories} to reverse-score.",
-        "x" = "Reverse-keyed item(s) with no category count: {.val {offending}}."),
-      data = list(arg = "items$categories", observed = offending), call = call
+      c("Reverse-keyed items need a known {.field max} to reverse-score.",
+        "x" = "Reverse-keyed item(s) with no scale maximum: {.val {offending}}."),
+      data = list(arg = "items$max", observed = offending), call = call
     )
   }
   mins <- items$min                       # scale base; default 1 for direct callers
@@ -253,10 +253,10 @@ apply_split_half_keying <- function(responses, items, call = rlang::caller_env()
     )
   }
   rev_cols <- responses[, rk, drop = FALSE]
-  rev_max  <- mins[rk] + cats[rk] - 1L    # scale maximum per reverse item
+  rev_max  <- maxs[rk]                    # scale maximum per reverse item
   # Cross-check the DECLARED range against the OBSERVED responses before
   # reflecting: a type-valid but wrong declaration (the classic case: 0-based
-  # data declared categories = 5 with the default min = 1) would otherwise
+  # 0..4 data declared max = 5 with the default min = 1) would otherwise
   # reflect to off-scale values and silently corrupt the consistency score.
   # The person-fit bridges catch the same mistake in personfit_zero_base(); this
   # gives the split-half family (and Ht's reverse items) the equivalent guard.
@@ -270,9 +270,9 @@ apply_split_half_keying <- function(responses, items, call = rlang::caller_env()
     cier_abort(
       "cier_error_input",
       c("Reverse-keyed item responses must lie within the declared scale range \\
-         {.val [min, min + categories - 1]}.",
+         {.val [min, max]}.",
         "x" = "Out-of-range reverse-keyed item(s): {.val {offending}}.",
-        "i" = "Check {.field categories} / {.field min} against the data (a \\
+        "i" = "Check {.field max} / {.field min} against the data (a \\
                0-based scale needs {.field min} = 0); reflecting an off-range \\
                value would silently corrupt the score."),
       data = list(arg = "items", observed = offending), call = call

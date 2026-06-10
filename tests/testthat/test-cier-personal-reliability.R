@@ -18,14 +18,14 @@ source(test_path("..", "reference", "ref-pr-jackson-1976.R"))
 source(test_path("..", "reference", "ref-rpr-goldammer-2024.R"))
 
 # Scale-blocked `items`: `n_scales` scales of `per_scale` items each.
-blocked_items <- function(n_scales = 3L, per_scale = 4L, categories = 5L,
+blocked_items <- function(n_scales = 3L, per_scale = 4L, max = 5L,
                           reverse_keyed = NULL) {
   scale <- rep(LETTERS[seq_len(n_scales)], each = per_scale)
   if (is.null(reverse_keyed)) {
     reverse_keyed <- rep(c(FALSE, TRUE), length.out = length(scale))
   }
   data.frame(scale = scale, reverse_keyed = reverse_keyed,
-             categories = categories, stringsAsFactors = FALSE)
+             max = max, stringsAsFactors = FALSE)
 }
 
 # Build the scale blocks INDEPENDENTLY of production (the oracles need them but
@@ -43,10 +43,11 @@ rand_matrix <- function(n = 30L, p = 12L, seed = 7L) {
   x
 }
 
-# Independently reverse-score (categories + 1) - x on reverse items.
+# Independently reverse-score (min + max) - x on reverse items; the fixtures
+# here are 1-based, so the reflection is (1 + max) - x.
 prescore <- function(x, items) {
   rk <- items$reverse_keyed
-  x[, rk] <- (items$categories[rk] + 1L) - x[, rk]
+  x[, rk] <- (items$max[rk] + 1L) - x[, rk]
   x
 }
 
@@ -134,7 +135,7 @@ test_that("RPR averages only the finite iterations when a row abstains on some",
   # -> only one finite pair -> iteration NA), and is finite otherwise. RPR must
   # average ONLY the finite iterations (na.rm); a no-na.rm mean would return NA.
   it <- data.frame(scale = rep(c("A", "B"), each = 4L),
-                   reverse_keyed = FALSE, categories = 5L)
+                   reverse_keyed = FALSE, max = 5L)
   x <- rand_matrix(12L, 8L, 77L)
   x[1L, c(7L, 8L)] <- NA          # scale B (cols 5:8) keeps only items 5, 6
   blocks <- blocks_from_scale(it)
@@ -276,7 +277,7 @@ test_that("RPR draws NO permutation for a one-item scale (seed stays in sync)", 
   # and every value would diverge. The mixed battery (a 1-item scale plus three
   # >=2-item scales) makes the bytewise ref_rpr parity pin that skip.
   it <- data.frame(scale = c("A", "B", "B", "C", "C", "C", "D", "D"),
-                   reverse_keyed = FALSE, categories = 5L)
+                   reverse_keyed = FALSE, max = 5L)
   x <- rand_matrix(20L, 8L, 314L)
   expect_equal(cier_personal_reliability(x, it, n_resamples = 25L, seed = 5L)$value,
                ref_rpr(x, blocks_from_scale(it), 25L, 5L), tolerance = 1e-10)
@@ -399,7 +400,7 @@ test_that("honoured RPR reverse-keying also equals the oracle on pre-scored inpu
 
 test_that("a single-item scale is skipped; remaining scales still score (PR)", {
   it <- data.frame(scale = c("A", "B", "B", "C", "C"),
-                   reverse_keyed = FALSE, categories = 5L)
+                   reverse_keyed = FALSE, max = 5L)
   x <- matrix(c(3, 1, 5, 2, 4,
                 4, 2, 4, 1, 5), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
@@ -443,7 +444,7 @@ test_that("when every respondent abstains the cutoff warns and flags nobody", {
 # ---- Input validation (typed) ----------------------------------------------
 
 test_that("fewer than two distinct scales is a typed input error", {
-  it <- data.frame(scale = rep("A", 4L), reverse_keyed = FALSE, categories = 5L)
+  it <- data.frame(scale = rep("A", 4L), reverse_keyed = FALSE, max = 5L)
   x <- matrix(c(1, 2, 3, 4, 5, 4, 3, 2), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
   expect_error(cier_personal_reliability(x, it, resample = FALSE),

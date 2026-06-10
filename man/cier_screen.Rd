@@ -12,7 +12,8 @@ internally) of responses, one row per respondent and one column per item.
 \code{NA} marks a missing response.}
 
 \item{items}{Optional item metadata, one row per item aligned to the columns
-of \code{responses} (\code{scale}, \code{reverse_keyed}, \code{categories}, optional \code{min}).
+of \code{responses} (\code{scale}, \code{reverse_keyed}, \code{max}, optional \code{min}; see e.g.
+\code{\link[=cier_even_odd]{cier_even_odd()}} for the column definitions).
 \code{NULL} (default) runs only the six matrix-only indices and skips the four
 metadata indices with a recorded reason.}
 
@@ -44,19 +45,38 @@ single careless/not label} -- the count of flagged constructs and the
 agreement diagnostic are reported, and the researcher chooses how to threshold.
 }
 \details{
-\strong{What runs.} The registry's \code{screenable} indices,
-optionally restricted by \code{methods}, are run in registry order. The four
-indices that need item metadata (\code{\link[=cier_even_odd]{cier_even_odd()}}, \code{\link[=cier_personal_reliability]{cier_personal_reliability()}},
-\code{\link[=cier_gnormed]{cier_gnormed()}}, \code{\link[=cier_ht]{cier_ht()}}) are \strong{skipped with a recorded reason} when
-\code{items} is \code{NULL}; the two backed by a \code{Suggests} package (\code{\link[=cier_gnormed]{cier_gnormed()}} via
-\code{PerFit}, \code{\link[=cier_ht]{cier_ht()}} via \code{mokken}) are skipped when that package is not
-installed. An index that hits a typed \strong{backend limit} on otherwise-valid
-data (for example \code{mokken}'s 10-category ceiling for \code{\link[=cier_ht]{cier_ht()}}) is likewise
-recorded as skipped with the limit as the reason, so one index's ceiling
-never aborts the battery. The skipped indices and their reasons are in
-\verb{$skipped}. A genuinely
+\strong{What runs.} Ten indices are screenable, run in registry order. Six need
+only \code{responses}: \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}}, \code{\link[=cier_psychsyn]{cier_psychsyn()}},
+\code{\link[=cier_psychant]{cier_psychant()}}, \code{\link[=cier_mahalanobis]{cier_mahalanobis()}}, \code{\link[=cier_person_total]{cier_person_total()}}. Four also
+need \code{items} metadata: \code{\link[=cier_even_odd]{cier_even_odd()}}, \code{\link[=cier_personal_reliability]{cier_personal_reliability()}},
+\code{\link[=cier_gnormed]{cier_gnormed()}} (requires \code{PerFit}), \code{\link[=cier_ht]{cier_ht()}} (requires \code{mokken}).
+Standalone indices (e.g. \code{\link[=cier_autocorrelation]{cier_autocorrelation()}}) are not run by the screen
+-- call them directly; \code{\link[=cier_methods]{cier_methods()}} lists every index with its registry
+properties. The four metadata indices are \strong{skipped with a recorded reason}
+when \code{items} is \code{NULL}, and the two backend indices when their \code{Suggests}
+package is not installed. An index that hits a typed \strong{backend limit} on
+otherwise-valid data (\code{mokken}'s 10-category ceiling for \code{\link[=cier_ht]{cier_ht()}};
+\code{PerFit}'s single-\code{Ncat} contract for \code{\link[=cier_gnormed]{cier_gnormed()}} on mixed response
+formats) is likewise recorded as skipped with the limit as the reason, so
+one index's ceiling never aborts the battery. The skipped indices and their
+reasons are in \verb{$skipped}. A genuinely
 malformed \code{items} frame is \strong{not} skipped -- the index's own typed error is
 left to surface so you can fix the metadata.
+
+\strong{Mixed response formats.} Only \code{\link[=cier_gnormed]{cier_gnormed()}} requires a single number
+of response categories across all items (\code{PerFit}'s polytomous statistics
+score one \code{Ncat}; see also Niessen et al., 2016) -- on mixed-format data the
+screen records it as skipped, as described above. Every other index runs on
+items with differing response ranges, but the published validation of these
+indices is almost entirely confined to uniform formats: Curran (2016)
+describes even-odd consistency "across a series of similar scales using the
+same response format", and \code{mokken} warns (since its 3.0.3 release) when
+items have different numbers of response categories. Interpret mixed-format
+screens with corresponding care. One mechanical caveat: a respondent who
+always picks the same option \emph{position} produces varying raw values across
+blocks whose scale range differs, so the zero-variance abstention of the
+consistency indices no longer applies to such straightliners -- pair them
+with \code{\link[=cier_longstring]{cier_longstring()}} and \code{\link[=cier_irv]{cier_irv()}}, which still catch that pattern.
 
 \strong{Selecting indices.} Goldammer et al. (2024) report resampled personal
 reliability as the single strongest indirect indicator, so weaker indices can
@@ -103,15 +123,16 @@ walks through this.
 }
 \examples{
 # The 44 BFI items are the first 44 columns of the bundled example data; a
-# trailing "_R" in the column name marks a reverse-keyed item, and the scale
-# is the BFI domain (the letters between the "v_BFI_" prefix and the item
-# number, e.g. EX, AG, CON, NEU, OP). Seed BOTH randomised pieces (RPR's
-# resampling, Gnormed's Monte-Carlo null) for a reproducible screen.
+# trailing "_R" in the column name marks a reverse-keyed item, the items are
+# coded 1..5, and the scale is the BFI domain (the letters between the
+# "v_BFI_" prefix and the item number, e.g. EX, AG, CON, NEU, OP). Seed BOTH
+# randomised pieces (RPR's resampling, Gnormed's Monte-Carlo null) for a
+# reproducible screen.
 nm <- names(bfi_careless)[1:44]
 items <- data.frame(
   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\\\1", nm),
   reverse_keyed = grepl("_R$", nm),
-  categories = 5L
+  max = 5L
 )
 screen <- cier_screen(bfi_careless[, 1:44], items,
                       control = list(cier_personal_reliability = list(seed = 1),
@@ -130,6 +151,11 @@ direct and indirect measures. \emph{Behavior Research Methods}, 56, 8422-8449.
 
 Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey
 data. \emph{Psychological Methods}, 17(3), 437-455. \doi{10.1037/a0028085}
+
+Niessen, A. S. M., Meijer, R. R., & Tendeiro, J. N. (2016). Detecting
+careless respondents in web-based questionnaires: Which method to use?
+\emph{Journal of Research in Personality}, 63, 1-11.
+\doi{10.1016/j.jrp.2016.04.010}
 }
 \seealso{
 The index functions \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}},

@@ -38,19 +38,38 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' agreement diagnostic are reported, and the researcher chooses how to threshold.
 #'
 #' @details
-#' **What runs.** The registry's `screenable` indices,
-#' optionally restricted by `methods`, are run in registry order. The four
-#' indices that need item metadata ([cier_even_odd()], [cier_personal_reliability()],
-#' [cier_gnormed()], [cier_ht()]) are **skipped with a recorded reason** when
-#' `items` is `NULL`; the two backed by a `Suggests` package ([cier_gnormed()] via
-#' `PerFit`, [cier_ht()] via `mokken`) are skipped when that package is not
-#' installed. An index that hits a typed **backend limit** on otherwise-valid
-#' data (for example `mokken`'s 10-category ceiling for [cier_ht()]) is likewise
-#' recorded as skipped with the limit as the reason, so one index's ceiling
-#' never aborts the battery. The skipped indices and their reasons are in
-#' `$skipped`. A genuinely
+#' **What runs.** Ten indices are screenable, run in registry order. Six need
+#' only `responses`: [cier_longstring()], [cier_irv()], [cier_psychsyn()],
+#' [cier_psychant()], [cier_mahalanobis()], [cier_person_total()]. Four also
+#' need `items` metadata: [cier_even_odd()], [cier_personal_reliability()],
+#' [cier_gnormed()] (requires `PerFit`), [cier_ht()] (requires `mokken`).
+#' Standalone indices (e.g. [cier_autocorrelation()]) are not run by the screen
+#' -- call them directly; [cier_methods()] lists every index with its registry
+#' properties. The four metadata indices are **skipped with a recorded reason**
+#' when `items` is `NULL`, and the two backend indices when their `Suggests`
+#' package is not installed. An index that hits a typed **backend limit** on
+#' otherwise-valid data (`mokken`'s 10-category ceiling for [cier_ht()];
+#' `PerFit`'s single-`Ncat` contract for [cier_gnormed()] on mixed response
+#' formats) is likewise recorded as skipped with the limit as the reason, so
+#' one index's ceiling never aborts the battery. The skipped indices and their
+#' reasons are in `$skipped`. A genuinely
 #' malformed `items` frame is **not** skipped -- the index's own typed error is
 #' left to surface so you can fix the metadata.
+#'
+#' **Mixed response formats.** Only [cier_gnormed()] requires a single number
+#' of response categories across all items (`PerFit`'s polytomous statistics
+#' score one `Ncat`; see also Niessen et al., 2016) -- on mixed-format data the
+#' screen records it as skipped, as described above. Every other index runs on
+#' items with differing response ranges, but the published validation of these
+#' indices is almost entirely confined to uniform formats: Curran (2016)
+#' describes even-odd consistency "across a series of similar scales using the
+#' same response format", and `mokken` warns (since its 3.0.3 release) when
+#' items have different numbers of response categories. Interpret mixed-format
+#' screens with corresponding care. One mechanical caveat: a respondent who
+#' always picks the same option *position* produces varying raw values across
+#' blocks whose scale range differs, so the zero-variance abstention of the
+#' consistency indices no longer applies to such straightliners -- pair them
+#' with [cier_longstring()] and [cier_irv()], which still catch that pattern.
 #'
 #' **Selecting indices.** Goldammer et al. (2024) report resampled personal
 #' reliability as the single strongest indirect indicator, so weaker indices can
@@ -99,7 +118,8 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #'   internally) of responses, one row per respondent and one column per item.
 #'   `NA` marks a missing response.
 #' @param items Optional item metadata, one row per item aligned to the columns
-#'   of `responses` (`scale`, `reverse_keyed`, `categories`, optional `min`).
+#'   of `responses` (`scale`, `reverse_keyed`, `max`, optional `min`; see e.g.
+#'   [cier_even_odd()] for the column definitions).
 #'   `NULL` (default) runs only the six matrix-only indices and skips the four
 #'   metadata indices with a recorded reason.
 #' @param methods Optional character vector of method ids to run.
@@ -131,21 +151,27 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey
 #' data. *Psychological Methods*, 17(3), 437-455. \doi{10.1037/a0028085}
 #'
+#' Niessen, A. S. M., Meijer, R. R., & Tendeiro, J. N. (2016). Detecting
+#' careless respondents in web-based questionnaires: Which method to use?
+#' *Journal of Research in Personality*, 63, 1-11.
+#' \doi{10.1016/j.jrp.2016.04.010}
+#'
 #' @seealso The index functions [cier_longstring()], [cier_irv()],
 #'   [cier_personal_reliability()], [cier_gnormed()], [cier_ht()]
 #' @family orchestration
 #' @export
 #' @examples
 #' # The 44 BFI items are the first 44 columns of the bundled example data; a
-#' # trailing "_R" in the column name marks a reverse-keyed item, and the scale
-#' # is the BFI domain (the letters between the "v_BFI_" prefix and the item
-#' # number, e.g. EX, AG, CON, NEU, OP). Seed BOTH randomised pieces (RPR's
-#' # resampling, Gnormed's Monte-Carlo null) for a reproducible screen.
+#' # trailing "_R" in the column name marks a reverse-keyed item, the items are
+#' # coded 1..5, and the scale is the BFI domain (the letters between the
+#' # "v_BFI_" prefix and the item number, e.g. EX, AG, CON, NEU, OP). Seed BOTH
+#' # randomised pieces (RPR's resampling, Gnormed's Monte-Carlo null) for a
+#' # reproducible screen.
 #' nm <- names(bfi_careless)[1:44]
 #' items <- data.frame(
 #'   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
 #'   reverse_keyed = grepl("_R$", nm),
-#'   categories = 5L
+#'   max = 5L
 #' )
 #' screen <- cier_screen(bfi_careless[, 1:44], items,
 #'                       control = list(cier_personal_reliability = list(seed = 1),

@@ -37,10 +37,12 @@ ref_personfit_gnormed_poly <- function(data, ncat = NULL) {
   resp <- data$responses
   rk <- data$items$reverse_keyed
   if (any(rk)) {
-    reflect <- data$items$categories[rk] + 1L
+    # The oracle's fixtures are base-1 (1..max), so (min + max) - x is
+    # (1 + max) - x and the category count Ncat equals max.
+    reflect <- data$items$max[rk] + 1L
     resp[, rk] <- rep(reflect, each = nrow(resp)) - resp[, rk]
   }
-  if (is.null(ncat)) ncat <- as.integer(data$items$categories[[1L]])
+  if (is.null(ncat)) ncat <- as.integer(data$items$max[[1L]])
   n <- nrow(resp)
   i <- ncol(resp)
   mm <- ncat - 1L
@@ -108,7 +110,8 @@ ref_personfit_ht_poly <- function(data, ncat = NULL) {
   resp <- data$responses
   rk <- data$items$reverse_keyed
   if (any(rk)) {
-    reflect <- data$items$categories[rk] + 1L
+    # Base-1 fixtures: (min + max) - x is (1 + max) - x.
+    reflect <- data$items$max[rk] + 1L
     resp[, rk] <- rep(reflect, each = nrow(resp)) - resp[, rk]
   }
   n <- nrow(resp)

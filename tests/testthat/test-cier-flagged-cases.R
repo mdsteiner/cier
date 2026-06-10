@@ -17,11 +17,11 @@ flag_matrix <- function(n = 60L, p = 20L, seed = 1L) {
   m
 }
 
-flag_items <- function(n_scales = 10L, per_scale = 3L, categories = 5L) {
+flag_items <- function(n_scales = 10L, per_scale = 3L, max = 5L) {
   scale <- rep(paste0("s", seq_len(n_scales)), each = per_scale)
   data.frame(scale = scale,
              reverse_keyed = rep(c(FALSE, TRUE), length.out = length(scale)),
-             categories = categories, stringsAsFactors = FALSE)
+             max = max, stringsAsFactors = FALSE)
 }
 
 base8 <- function() {
@@ -73,7 +73,7 @@ test_that("flagged-case count matches the agreement table, on real multi-vote da
   # >= 1 set for every threshold) and an "always empty above 1" mutant both fail.
   nm <- names(bfi_careless)[1:44]
   items <- data.frame(scale = gsub("^v_BFI_|[0-9_R]+$", "", nm),
-                      reverse_keyed = grepl("_R$", nm), categories = 5L)
+                      reverse_keyed = grepl("_R$", nm), max = 5L)
   sc <- cier_screen(bfi_careless[, 1:44], items, methods = base8(),
                     control = list(cier_personal_reliability = list(seed = 1)))
   n <- sc$n_respondents

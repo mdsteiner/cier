@@ -25,12 +25,18 @@
 #' **PerFit is required.** Gnormed is scored by [PerFit::Gnormed.poly()], so the
 #' `PerFit` package must be installed; the index aborts with an informative error
 #' otherwise. Reverse-keyed items (`items$reverse_keyed`) are reverse-scored first
-#' with the self-inverse reflection `(min + max) - x` (where
-#' `max = min + categories - 1`, and `min` defaults to `1`, i.e. the classic
-#' `(categories + 1) - x`); the responses are then recoded to PerFit's documented
-#' `0..(Ncat - 1)` contract. Supply the raw responses and declare reverse items
-#' through `items`. PerFit requires a single number of response categories, so
-#' `items$categories` must be the same integer (`>= 2`) on every item.
+#' with the self-inverse reflection `(min + max) - x` (`min` defaults to `1`,
+#' i.e. the classic `(max + 1) - x`); the responses are then recoded to PerFit's
+#' documented `0..(Ncat - 1)` contract. Supply the raw responses and declare
+#' reverse items through `items`. PerFit scores a **single number of response
+#' categories** (`Ncat = max - min + 1`), so every item must have the same
+#' `max - min` span -- items may still differ in base (a `1..5` and a `0..4`
+#' item both have five options and score together). Genuinely mixed-format
+#' data (say four- and seven-option items) is a **backend limit**, not a
+#' metadata mistake: the typed error carries a dedicated subclass, and
+#' [cier_screen()] records Gnormed as skipped with that reason instead of
+#' aborting the battery -- score homogeneous item subsets separately if you
+#' need Gnormed on such data.
 #'
 #' **Cutoff -- the PerFit Monte-Carlo null.** Unlike the sample-percentile
 #' indices, Gnormed's default cutoff is referenced to a **simulated null**: PerFit
@@ -47,12 +53,11 @@
 #'
 #' **The sample must span the declared scale.** PerFit's item-step popularities
 #' are undefined when a scale end never occurs, so the complete-case block must
-#' **attain both extremes**: the lowest and the highest of the declared
-#' `categories` must each be chosen at least once somewhere in the sample. A
-#' perfectly valid dataset in which, say, nobody ever picked the top category
-#' raises a typed error rather than scoring -- check `categories` / `min`
-#' against the data, or expect this on small samples with rarely-endorsed
-#' extreme categories.
+#' **attain both extremes**: the declared `min` and `max` must each be chosen
+#' at least once somewhere in the sample. A perfectly valid dataset in which,
+#' say, nobody ever picked the top category raises a typed error rather than
+#' scoring -- check `max` / `min` against the data, or expect this on small
+#' samples with rarely-endorsed extreme categories.
 #'
 #' **Abstention.** Because [PerFit::Gnormed.poly()] needs complete data, a
 #' respondent with **any** missing cell is excluded: both `value` and `flagged`
@@ -73,8 +78,9 @@
 #'   internally) of responses, one row per respondent and one column per item.
 #'   `NA` marks a missing response.
 #' @param items A data.frame of item metadata, one row per item, aligned to the
-#'   columns of `responses`. Must carry an integer `categories` column (the number
-#'   of response options) that is the **same** value (`>= 2`) on every item. An
+#'   columns of `responses`. Must carry an integer `max` column (the largest
+#'   response option) on every item, with the **same** span `max - min` on every
+#'   item (PerFit's single `Ncat`; at least two options, `max >= min + 1`). An
 #'   optional logical `reverse_keyed` column marks reverse-keyed items (default:
 #'   none). An optional integer `min` column gives the smallest response option
 #'   (the scale base; default `1`) -- declare it for a 0-based or bipolar scale.
@@ -110,10 +116,10 @@
 #' @export
 #' @examplesIf requireNamespace("PerFit", quietly = TRUE)
 #' # The 44 BFI items are the first 44 columns of the bundled example data; they
-#' # are 5-point items. Build item metadata from the column names: a trailing "_R"
-#' # marks a reverse-keyed item.
+#' # are 5-point items coded 1..5. Build item metadata from the column names: a
+#' # trailing "_R" marks a reverse-keyed item.
 #' nm <- names(bfi_careless)[1:44]
-#' items <- data.frame(reverse_keyed = grepl("_R$", nm), categories = 5L)
+#' items <- data.frame(reverse_keyed = grepl("_R$", nm), max = 5L)
 #' out <- cier_gnormed(bfi_careless[, 1:44], items, seed = 1)
 #' out
 #' head(as.data.frame(out))
@@ -133,7 +139,7 @@ cier_gnormed <- function(responses, items, fpr = NULL, cutoff = NULL,
   # returns the per-respondent values (NA where abstaining) and the fitted PerFit
   # object that the Monte-Carlo null cutoff reuses.
   responses <- apply_split_half_keying(responses, items, call = call)
-  res <- kernel_gnormed(responses, items$categories, items$min, call = call)
+  res <- kernel_gnormed(responses, items$ncat, items$min, call = call)
   cutoff_value <- resolve_gnormed_cutoff(res$fit, fpr, cutoff,
                                          row$default_cutoff_value, seed,
                                          call = call)

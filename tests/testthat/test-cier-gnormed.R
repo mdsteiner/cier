@@ -27,12 +27,13 @@ poly_matrix <- function(n = 60L, p = 12L, ncat = 5L, seed = 21L) {
   m
 }
 
-# Item metadata for cier_gnormed(): homogeneous `categories`, optional
-# `reverse_keyed`. The same data.frame doubles as the oracle's `data$items`
-# (the oracle reads items$reverse_keyed and items$categories).
+# Item metadata for cier_gnormed(): homogeneous span (the fixtures are 1-based,
+# 1..ncat, so `max = ncat`), optional `reverse_keyed`. The same data.frame
+# doubles as the oracle's `data$items` (the oracle reads items$reverse_keyed
+# and items$max under its own 1-based contract).
 poly_items <- function(p = 12L, reverse = FALSE, ncat = 5L) {
   rk <- if (length(reverse) == 1L) rep(reverse, p) else reverse
-  data.frame(reverse_keyed = rk, categories = ncat)
+  data.frame(reverse_keyed = rk, max = ncat)
 }
 
 # Recode 1..ncat -> 0..(ncat-1) for a hand-built PerFit call.
@@ -312,28 +313,65 @@ test_that("the scale base (items$min) is honoured for keying and zero-basing", {
   # Min-invariance: the same responses in 1..ncat coding (min = 1, default) and
   # in 0..(ncat-1) coding (min = 0) must score identically -- with a reverse-keyed
   # item present so the (min + max) - x reflection is exercised, not just the
-  # zero-base. A bridge that hardcodes `- 1` zero-basing or `(categories + 1) - x`
-  # reflection (ignoring min) diverges on the 0-based scale. The ported oracle
-  # hardcodes a base of 1, so this is asserted as an internal invariance.
+  # zero-base. A bridge that hardcodes `- 1` zero-basing or `(max + 1) - x`
+  # reflection (ignoring min), or that derives Ncat as `max` instead of
+  # `max - min + 1` (the 0-based declaration has max = 4 but five categories),
+  # diverges or errors on the 0-based scale. The ported oracle hardcodes a base
+  # of 1, so this is asserted as an internal invariance.
   skip_if_not_installed("PerFit")
   rk <- rep(c(FALSE, TRUE), 5L)
   m1 <- poly_matrix(n = 50L, p = 10L, ncat = 5L, seed = 31L)   # 1..5 coding
   items1 <- poly_items(10L, reverse = rk)                       # min defaults 1
   m0 <- m1 - 1L                                                 # 0..4 coding
-  items0 <- data.frame(reverse_keyed = rk, categories = 5L, min = 0L)
+  items0 <- data.frame(reverse_keyed = rk, max = 4L, min = 0L)
   expect_equal(cier_gnormed(m1, items1, cutoff = 0.5)$value,
                cier_gnormed(m0, items0, cutoff = 0.5)$value,
                tolerance = 0)
 })
 
+test_that("items with equal span but different bases score together (per-item base)", {
+  # PerFit's single-Ncat contract is about the NUMBER of response options
+  # (max - min + 1), not about identical min/max pairs: a battery mixing 1..5
+  # and 0..4 items (both five options) is valid and must equal the all-1..5
+  # scoring of the same underlying responses. A homogeneity check on `max`
+  # alone (or a global rather than per-item zero-base) would reject or
+  # mis-score it.
+  skip_if_not_installed("PerFit")
+  m1 <- poly_matrix(n = 50L, p = 6L, ncat = 5L, seed = 41L)     # all 1..5
+  m_mixed <- m1
+  m_mixed[, 4:6] <- m_mixed[, 4:6] - 1L                         # cols 4-6: 0..4
+  items_mixed <- data.frame(reverse_keyed = FALSE,
+                            max = c(5L, 5L, 5L, 4L, 4L, 4L),
+                            min = c(1L, 1L, 1L, 0L, 0L, 0L))
+  expect_equal(cier_gnormed(m_mixed, items_mixed, cutoff = 0.5)$value,
+               cier_gnormed(m1, poly_items(6L), cutoff = 0.5)$value,
+               tolerance = 0)
+})
+
+test_that("a two-option 0/1 declaration (min = 0, max = 1) scores (dichotomous base)", {
+  # The smallest valid scale through the personfit validator: max >= min + 1 is
+  # the bound, so a validator demanding max >= 2 regardless of min would
+  # wrongly reject this valid declaration. Equality with the same data in 1..2
+  # coding pins the full min/max plumbing at Ncat = 2.
+  skip_if_not_installed("PerFit")
+  m2 <- poly_matrix(n = 40L, p = 6L, ncat = 2L, seed = 43L)   # 1..2 coding
+  m2[1L, 1L] <- 1                  # force both extremes somewhere in the block
+  m2[2L, 1L] <- 2
+  m01 <- m2 - 1L                                              # 0/1 coding
+  items01 <- data.frame(reverse_keyed = rep(FALSE, 6L), max = 1L, min = 0L)
+  expect_equal(cier_gnormed(m01, items01, cutoff = 0.5)$value,
+               cier_gnormed(m2, poly_items(6L, ncat = 2L), cutoff = 0.5)$value,
+               tolerance = 0)
+})
+
 test_that("a response outside the declared scale is a typed input error", {
   # The bridge zero-bases to 0..(Ncat - 1) and range-checks; a code above
-  # `categories` (or below `min`) is a data/contract violation, not silently
+  # `max` (or below `min`) is a data/contract violation, not silently
   # coerced. check_responses only rejects NaN/Inf, so this pins the bridge's own
   # range guard.
   skip_if_not_installed("PerFit")
   m <- poly_matrix(n = 10L, p = 6L, seed = 32L)
-  m[1L, 1L] <- 6                    # exceeds categories = 5
+  m[1L, 1L] <- 6                    # exceeds max = 5
   expect_error(cier_gnormed(m, poly_items(6L)), class = "cier_error_input")
 })
 
@@ -371,30 +409,59 @@ test_that("a non-matrix / non-numeric / non-finite payload is a typed input erro
   expect_error(cier_gnormed(bad, poly_items(6L)), class = "cier_error_input")
 })
 
-test_that("malformed items (categories) are typed input errors", {
+test_that("malformed items (max) are typed input errors", {
   m <- poly_matrix(n = 10L, p = 6L)
-  # categories column absent
+  # max column absent
   expect_error(cier_gnormed(m, data.frame(reverse_keyed = rep(FALSE, 6L))),
                class = "cier_error_input")
-  # heterogeneous categories (PerFit needs a single Ncat)
-  expect_error(cier_gnormed(m, data.frame(categories = c(5, 5, 5, 5, 5, 4))),
+  # NA max
+  expect_error(cier_gnormed(m, data.frame(max = c(5, 5, 5, 5, 5, NA))),
                class = "cier_error_input")
-  # NA category
-  expect_error(cier_gnormed(m, data.frame(categories = c(5, 5, 5, 5, 5, NA))),
-               class = "cier_error_input")
-  # fewer than two categories
-  expect_error(cier_gnormed(m, data.frame(categories = rep(1, 6L))),
+  # fewer than two response options (max == min with the default min = 1)
+  expect_error(cier_gnormed(m, data.frame(max = rep(1, 6L))),
                class = "cier_error_input")
   # wrong number of item rows
-  expect_error(cier_gnormed(m, data.frame(categories = rep(5, 3L))),
+  expect_error(cier_gnormed(m, data.frame(max = rep(5, 3L))),
                class = "cier_error_input")
+  # fractional and non-finite max are PLAIN input errors -- although both also
+  # make the spans unequal, per-item validity is classified before homogeneity,
+  # so neither may carry the backend-limit subclass (the screen must propagate
+  # them, not skip).
+  for (bad_max in list(c(5, 5, 5, 5, 5, 2.5), c(5, 5, 5, 5, 5, Inf))) {
+    err <- tryCatch(cier_gnormed(m, data.frame(max = bad_max)),
+                    error = function(e) e)
+    expect_s3_class(err, "cier_error_input")
+    expect_false(inherits(err, "cier_error_backend_limit"))
+  }
+})
+
+test_that("a heterogeneous span is a typed backend limit, not a plain input error", {
+  # Accurate metadata describing genuinely mixed-format data (here five-option
+  # and four-option items together) is not a malformed frame: it is PerFit's
+  # single-Ncat contract that cannot score it. The abort therefore carries the
+  # cier_error_backend_limit subclass -- the same line the mokken 10-category
+  # ceiling draws -- so cier_screen() can skip-with-reason instead of dying.
+  # It remains a cier_error_input for direct callers.
+  m <- poly_matrix(n = 10L, p = 6L)
+  het <- data.frame(max = c(5, 5, 5, 5, 5, 4))
+  expect_error(cier_gnormed(m, het), class = "cier_error_input")
+  expect_error(cier_gnormed(m, het), class = "cier_error_backend_limit")
+  # The limit is on the span (number of options), NOT on max itself: equal max
+  # with differing min is just as heterogeneous (spans 4 vs 5)...
+  het_min <- data.frame(max = 5, min = c(1, 1, 1, 1, 1, 0))
+  expect_error(cier_gnormed(m, het_min), class = "cier_error_backend_limit")
+  # ...while a malformed per-item max (NA) stays a PLAIN input error: the
+  # backend-limit subclass must not swallow genuine metadata defects.
+  bad <- tryCatch(cier_gnormed(m, data.frame(max = c(5, 5, 5, 5, 5, NA))),
+                  error = function(e) e)
+  expect_false(inherits(bad, "cier_error_backend_limit"))
 })
 
 test_that("a non-data.frame items or a non-integer min is a typed input error", {
   m <- poly_matrix(n = 10L, p = 6L)
   expect_error(cier_gnormed(m, "not a frame"), class = "cier_error_input")
   # `min` (the scale base) must be a finite whole number on every item.
-  bad_min <- data.frame(categories = 5L, min = c(1, 1, 1, 1, 1, 1.5))
+  bad_min <- data.frame(max = 5L, min = c(1, 1, 1, 1, 1, 1.5))
   expect_error(cier_gnormed(m, bad_min), class = "cier_error_input")
 })
 

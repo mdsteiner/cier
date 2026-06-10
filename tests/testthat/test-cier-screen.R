@@ -29,15 +29,15 @@ screen_matrix <- function(n = 80L, p = 20L, seed = 1L) {
 }
 
 # Item metadata that serves all four metadata indices at once: >= 2 scales and a
-# reverse_keyed column (even-odd, PR) plus a homogeneous categories column
-# (Gnormed, Ht). 4 scales x 5 items = 20 columns, alternating reverse keys.
-screen_items <- function(n_scales = 4L, per_scale = 5L, categories = 5L,
+# reverse_keyed column (even-odd, PR) plus a homogeneous max column (1-based
+# fixtures; Gnormed, Ht). 4 scales x 5 items = 20 columns, alternating keys.
+screen_items <- function(n_scales = 4L, per_scale = 5L, max = 5L,
                          reverse = NULL) {
   scale <- rep(paste0("s", seq_len(n_scales)), each = per_scale)
   if (is.null(reverse)) {
     reverse <- rep(c(FALSE, TRUE), length.out = length(scale))
   }
-  data.frame(scale = scale, reverse_keyed = reverse, categories = categories,
+  data.frame(scale = scale, reverse_keyed = reverse, max = max,
              stringsAsFactors = FALSE)
 }
 
@@ -219,7 +219,7 @@ test_that("a typed backend limit records a skip instead of crashing the battery"
   x[2L, 1L] <- 11
   storage.mode(x) <- "double"
   it <- data.frame(scale = rep(c("s1", "s2"), each = 4L),
-                   reverse_keyed = FALSE, categories = 11L,
+                   reverse_keyed = FALSE, max = 11L,
                    stringsAsFactors = FALSE)
   sc <- q(cier_screen(x, it,
                       methods = c("cier_longstring", "cier_irv", "cier_ht")))
@@ -420,17 +420,34 @@ test_that("malformed items for a selected metadata index propagate the error", {
   x <- screen_matrix(40L, 20L, 15L)
   # Only one scale -> even-odd's typed input error must surface, not a skip.
   one_scale <- data.frame(scale = rep("A", 20L), reverse_keyed = FALSE,
-                          categories = 5L)
+                          max = 5L)
   expect_error(cier_screen(x, one_scale, methods = "cier_even_odd"),
                class = "cier_error_input")
 })
 
-test_that("heterogeneous categories for Gnormed propagate the error", {
+test_that("a heterogeneous span skips Gnormed with a reason; the battery survives", {
+  # Accurate metadata for genuinely mixed-format data (five- and four-option
+  # items together) hits PerFit's single-Ncat contract -- a backend limit, not a
+  # malformed frame -- so the screen records Gnormed as skipped (mirroring
+  # mokken's 10-category ceiling) instead of aborting the whole battery. The
+  # 5-point block alone would zero-base 1..5 -> 0..4; the data here stays valid
+  # for every other index.
   skip_if_not_installed("PerFit")
   x <- screen_matrix(40L, 20L, 16L)
+  x[, 11:20] <- pmin(x[, 11:20], 4)      # items 11-20 genuinely four-option
   het <- data.frame(scale = rep(c("A", "B"), each = 10L), reverse_keyed = FALSE,
-                    categories = c(rep(5L, 10L), rep(4L, 10L)))
-  expect_error(cier_screen(x, het, methods = "cier_gnormed"),
+                    max = c(rep(5L, 10L), rep(4L, 10L)))
+  sc <- q(cier_screen(x, het, methods = c("cier_irv", "cier_gnormed")))
+  expect_identical(names(sc$indices), "cier_irv")
+  expect_identical(sc$skipped$method, "cier_gnormed")
+  expect_match(sc$skipped$reason, "Ncat", fixed = TRUE)
+  expect_identical(colnames(sc$flags), "cier_irv")
+  # A genuinely MALFORMED gnormed frame (NA max on an item) is not a backend
+  # limit: it must still propagate, so the skip path cannot over-broadly catch
+  # every metadata error.
+  bad <- het
+  bad$max[1L] <- NA
+  expect_error(cier_screen(x, bad, methods = "cier_gnormed"),
                class = "cier_error_input")
 })
 
@@ -497,7 +514,7 @@ test_that("on real contaminated data the screen makes the agreement excess visib
   # oracles cannot. Sanity bound: no construct flags an implausible majority.
   nm <- names(bfi_careless)[1:44]
   items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
-                      reverse_keyed = grepl("_R$", nm), categories = 5L)
+                      reverse_keyed = grepl("_R$", nm), max = 5L)
   sc <- q(cier_screen(bfi_careless[, 1:44], items, methods = base_methods(),
                       control = list(cier_personal_reliability = list(seed = 1))))
   ag <- sc$agreement$agreement

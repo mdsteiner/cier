@@ -563,3 +563,68 @@ papers; Schroeders et al. 2022). Its binding choices:
   thousandths and pulls the pairing cells away from the paper; the vignette
   documents the check, and cier's abstain-rather-than-impute behaviour
   stands. `mice` is needed only to re-knit, so it stays out of `DESCRIPTION`.
+
+## Items schema: `min` / `max`, not `min` / `categories`
+
+The per-item metadata frame now declares the response range directly — `max`
+(the largest response option) replacing `categories` (the count of options) —
+after applying the package to a real mixed-format survey showed the count
+parameterisation forces users to maintain two interlocking columns and do the
+`max = min + categories - 1` arithmetic the package can do itself (Markus,
+2026-06-10; pre-release, clean break, no alias or deprecation shim). The two
+carry identical information; everything derivable is derived: the reverse-key
+reflection is `(min + max) - x` (the classic `(max + 1) - x` at the default
+base `min = 1`), the keying cross-check reads `[min, max]`, and the person-fit
+bridge's category count is `Ncat = max - min + 1`. The validity bound is
+`max >= min + 1` (at least two response options) — deliberately **not** an
+absolute `max >= 2`, so a 0/1 item is the smallest valid scale. `categories`
+was never a homogeneity requirement: per-item heterogeneous ranges were and
+are supported everywhere except the PerFit bridge (next entry).
+
+## Gnormed on mixed response formats: a backend limit, not bad metadata
+
+`PerFit`'s polytomous statistics score one `Ncat` across all items (the PerFit
+manual: "The number of answer options, Ncat, is the same for all items"; cf.
+Niessen et al. 2016, who recoded their battery to a uniform 4-point scale for
+the same reason). cier expresses that contract as a **span homogeneity** check:
+`max - min` must be constant — items may differ in base, so `1..5` and `0..4`
+items (both five options) score together after per-item zero-basing. A
+heterogeneous span on otherwise-valid metadata is *accurate* metadata for
+genuinely mixed-format data, not a malformed frame, so the abort carries the
+`cier_error_backend_limit` subclass and `cier_screen()` records Gnormed as
+skipped-with-reason — the same line mokken's 10-category ceiling already drew —
+instead of aborting the whole battery (Markus, 2026-06-10; this deliberately
+flips the original "heterogeneous categories propagate" screen pin). Per-item
+validity (absent / NA / fractional / non-finite / below-bound `max`) is checked
+**before** homogeneity and stays a plain `cier_error_input`, so a genuine
+metadata defect still propagates through the screen.
+
+## Mixed response formats: documented caveats, no automatic remediation
+
+The screen's documentation now lists the battery and adds a mixed-format
+section; the guidance makes only sourced claims: Gnormed's single-`Ncat`
+backend limit (PerFit manual; Niessen et al. 2016), Curran's (2016) "same
+response format" condition for even-odd consistency, mokken's since-3.0.3
+warning on mixed category counts, Gottfried et al.'s (2022) same-answer-scales
+rule for autocorrelation (quoted in `cier_autocorrelation()`'s help), and the
+mechanical fact that a fixed-position straightliner stops triggering the
+zero-variance abstention once scale ranges differ between blocks (pair the
+consistency indices with longstring / IRV). Published validation of the
+battery is otherwise uniformly-formatted, and the docs say so rather than
+extrapolate.
+
+Two remediations were evaluated on simulated mixed-format data (a 76-item,
+4/5/6/7-option design with uniform-random and fixed-position-straightliner
+contamination, 8 replications) and **not adopted** (Markus, 2026-06-10):
+splitting the battery into homogeneous-format subsets and combining per-subset
+votes *degraded* the consistency family (even-odd AUC 0.93 -> 0.81, resampled
+personal reliability 0.98 -> 0.90, IRV inverted) — these indices draw their
+power from correlating across many scales — and per-item POMP rescaling, which
+recovered the (small, ~0.01-0.02 AUC) heterogeneity dent, has no published
+precedent in the careless-responding literature, so it stays out of the
+documentation. The simulation itself: heterogeneity cost the consistency
+family little (even-odd 0.956 -> 0.933, RPR 0.990 -> 0.975, person-total
+0.997 -> 0.989 against random responders), left Mahalanobis and the synonym
+indices exactly invariant, and Gnormed-per-subset was the one case where
+splitting helps (it cannot run otherwise) — left as a documented user-side
+option, not automated.

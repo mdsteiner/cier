@@ -15,14 +15,14 @@ source(test_path("..", "reference", "ref-evenodd-curran-2016.R"))
 # Scale-blocked `items`: `n_scales` scales of `per_scale` items each.
 # `reverse_keyed` defaults to an alternating pattern; pass FALSE for analytic /
 # parity fixtures that must isolate the correlation math from reverse-scoring.
-blocked_items <- function(n_scales = 3L, per_scale = 4L, categories = 5L,
+blocked_items <- function(n_scales = 3L, per_scale = 4L, max = 5L,
                           reverse_keyed = NULL) {
   scale <- rep(LETTERS[seq_len(n_scales)], each = per_scale)
   if (is.null(reverse_keyed)) {
     reverse_keyed <- rep(c(FALSE, TRUE), length.out = length(scale))
   }
   data.frame(scale = scale, reverse_keyed = reverse_keyed,
-             categories = categories, stringsAsFactors = FALSE)
+             max = max, stringsAsFactors = FALSE)
 }
 
 # Build the scale blocks INDEPENDENTLY of production (the oracle needs them but
@@ -40,10 +40,11 @@ rand_matrix <- function(n = 30L, p = 12L, seed = 7L) {
   x
 }
 
-# Independently reverse-score (categories + 1) - x on reverse items.
+# Independently reverse-score (min + max) - x on reverse items; the fixtures
+# here are 1-based, so the reflection is (1 + max) - x.
 prescore <- function(x, items) {
   rk <- items$reverse_keyed
-  x[, rk] <- (items$categories[rk] + 1L) - x[, rk]
+  x[, rk] <- (items$max[rk] + 1L) - x[, rk]
   x
 }
 
@@ -206,22 +207,22 @@ test_that("apply_split_half_keying is a strict no-op without reverse items", {
   expect_identical(apply_split_half_keying(x, it), x)
 })
 
-test_that("apply_split_half_keying aborts on a reverse item with NA categories", {
+test_that("apply_split_half_keying aborts on a reverse item with NA max", {
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
                    reverse_keyed = c(FALSE, FALSE, TRUE, FALSE),
-                   categories = c(5L, 5L, NA, 5L))
+                   max = c(5L, 5L, NA, 5L))
   x <- matrix(c(1, 2, 3, 4), nrow = 1L)
   storage.mode(x) <- "double"
   expect_error(apply_split_half_keying(x, it), class = "cier_error_input")
 })
 
 test_that("apply_split_half_keying aborts on a reverse item with NA min", {
-  # Symmetric with the categories guard: a direct caller (bypassing check_items)
+  # Symmetric with the max guard: a direct caller (bypassing check_items)
   # that supplies a reverse item with no scale base must error, not silently
   # reflect to NA.
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
                    reverse_keyed = c(FALSE, FALSE, TRUE, FALSE),
-                   categories = 5L, min = c(1L, 1L, NA, 1L))
+                   max = 5L, min = c(1L, 1L, NA, 1L))
   x <- matrix(c(1, 2, 3, 4), nrow = 1L)
   storage.mode(x) <- "double"
   expect_error(apply_split_half_keying(x, it), class = "cier_error_input")
@@ -230,12 +231,14 @@ test_that("apply_split_half_keying aborts on a reverse item with NA min", {
 # ---- Reverse-keying respects the response-scale base (min) ------------------
 
 test_that("apply_split_half_keying reflects with the declared min: (min + max) - x", {
-  # 0..4 scale (min=0, categories=5 -> max=4): reverse items reflect by 4 - x,
-  # forward items untouched. A reflection that ignores min ((categories+1)-x)
-  # would send item 2 to 6 and escape the 0..4 range.
+  # 0..4 scale (min=0, max=4): reverse items reflect by 4 - x, forward items
+  # untouched. A reflection that ignores min ((max+1)-x) would send item 2 to 5
+  # and escape the 0..4 range; one that treats max as a category COUNT
+  # (min + (min + max - 1) - x = 3 - x) would send item 2 to 3, not 4. The
+  # exact-value pin kills both.
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
                    reverse_keyed = c(FALSE, TRUE, FALSE, TRUE),
-                   categories = 5L, min = 0L)
+                   max = 4L, min = 0L)
   x <- matrix(c(0, 0, 4, 4), nrow = 1L)
   storage.mode(x) <- "double"
   expect_equal(as.numeric(apply_split_half_keying(x, it)),
@@ -244,7 +247,7 @@ test_that("apply_split_half_keying reflects with the declared min: (min + max) -
 
 test_that("apply_split_half_keying defaults min to 1 when no min column (backward compat)", {
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
-                   reverse_keyed = c(FALSE, TRUE, FALSE, TRUE), categories = 5L)
+                   reverse_keyed = c(FALSE, TRUE, FALSE, TRUE), max = 5L)
   x <- matrix(c(1, 1, 5, 5), nrow = 1L)
   storage.mode(x) <- "double"
   # min defaults to 1: reflect (1 + 5) - x = 6 - x.
@@ -252,16 +255,16 @@ test_that("apply_split_half_keying defaults min to 1 when no min column (backwar
                c(1, 5, 5, 1), tolerance = 1e-12)
 })
 
-test_that("apply_split_half_keying handles per-item categories with a declared min", {
-  # Per-item categories + a 0 base: each reverse item reflects by its OWN
-  # (min + categories - 1) - x, guarding the vectorisation of max. A scalar
-  # recycle of categories[1] would mis-reflect items 2 and 4.
+test_that("apply_split_half_keying handles per-item max with a declared min", {
+  # Per-item max + a 0 base: each reverse item reflects by its OWN
+  # (min + max) - x, guarding the vectorisation. A scalar recycle of max[1]
+  # would mis-reflect items 2 and 4.
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
                    reverse_keyed = c(FALSE, TRUE, FALSE, TRUE),
-                   categories = c(5L, 4L, 6L, 3L), min = 0L)
+                   max = c(4L, 3L, 5L, 2L), min = 0L)
   x <- matrix(c(1, 2, 3, 1), nrow = 1L)
   storage.mode(x) <- "double"
-  # item 2: cats 4, min 0 -> max 3 -> 3 - 2 = 1; item 4: cats 3, min 0 -> 2 - 1 = 1.
+  # item 2: max 3, min 0 -> 3 - 2 = 1; item 4: max 2, min 0 -> 2 - 1 = 1.
   expect_equal(as.numeric(apply_split_half_keying(x, it)),
                c(1, 1, 3, 1), tolerance = 1e-12)
 })
@@ -270,32 +273,32 @@ test_that("responses outside the declared reverse-keying range are a typed error
   # A type-valid but WRONG declaration used to reflect to off-scale values and
   # silently corrupt the consistency score (flipping flags with no signal). The
   # keying step now cross-checks the observed range of every reverse-keyed
-  # column against [min, min + categories - 1] and aborts naming the offenders
-  # -- the same mistake the person-fit bridges already catch in
-  # personfit_zero_base(). The classic trigger: 0-based data (0..4, five
-  # options) declared categories = 5 but with the default min = 1, which would
-  # reflect 0 -> 6 and 4 -> 2.
+  # column against [min, max] and aborts naming the offenders -- the same
+  # mistake the person-fit bridges already catch in personfit_zero_base().
+  # The classic trigger: 0-based data (0..4, five options) declared max = 5
+  # with the default min = 1, which would reflect 0 -> 6 and 4 -> 2.
   x <- rand_matrix(20L, 12L, 3L) - 1     # 0..4 coding
-  it <- blocked_items(3L, 4L)            # categories = 5, min defaults to 1
+  it <- blocked_items(3L, 4L)            # max = 5, min defaults to 1
   expect_error(cier_even_odd(x, it), class = "cier_error_input")
   expect_error(cier_personal_reliability(x, it), class = "cier_error_input")
-  # Declaring the true base scores cleanly (the guard keys on the declaration).
+  # Declaring the true range scores cleanly (the guard keys on the declaration).
   it$min <- 0L
+  it$max <- 4L
   expect_s3_class(cier_even_odd(x, it), "cier_index")
-  # A declared categories SMALLER than the data is the other direction: 1..5
-  # data with categories = 3 would reflect 5 -> -1.
-  it2 <- blocked_items(3L, 4L, categories = 3L)
+  # A declared max SMALLER than the data is the other direction: 1..5 data
+  # with max = 3 would reflect 5 -> -1.
+  it2 <- blocked_items(3L, 4L, max = 3L)
   expect_error(cier_even_odd(rand_matrix(20L, 12L, 3L), it2),
                class = "cier_error_input")
 })
 
 test_that("the range cross-check ignores forward items and all-NA reverse columns", {
   # Only reverse-keyed columns are reflected, so only they are checked: a
-  # forward item may exceed the declared range without error (categories is not
+  # forward item may exceed the declared range without error (max is not
   # read for it), and an all-NA reverse column has no observed range to violate.
   it <- data.frame(scale = rep(c("A", "B"), each = 2L),
                    reverse_keyed = c(FALSE, TRUE, FALSE, TRUE),
-                   categories = 5L)
+                   max = 5L)
   x <- rand_matrix(10L, 4L, 5L)
   x[, 1L] <- 9                           # forward item off the declared range
   x[, 2L] <- NA_real_                    # all-NA reverse column
@@ -312,17 +315,18 @@ rotating_rev_items <- function() {
   rk <- rep(FALSE, 16L)
   rk[c(1L, 6L, 11L, 16L)] <- TRUE
   data.frame(scale = rep(LETTERS[1:4], each = 4L),
-             reverse_keyed = rk, categories = 5L, stringsAsFactors = FALSE)
+             reverse_keyed = rk, max = 5L, stringsAsFactors = FALSE)
 }
 
 test_that("even-odd is invariant to the response-scale base when min is declared", {
-  # The SAME respondents coded 1..5 (min=1) and 0..4 (min=0) must score
-  # identically -- the reflection must use the declared base. A min-ignoring
-  # (categories+1)-x reflection diverges by up to the full [-1, 1] range.
+  # The SAME respondents coded 1..5 (min=1, max=5) and 0..4 (min=0, max=4) must
+  # score identically -- the reflection must use the declared base. A
+  # min-ignoring (max+1)-x reflection diverges by up to the full [-1, 1] range.
   it1 <- rotating_rev_items()              # min defaults to 1 (1..5 coding)
   x1 <- rand_matrix(30L, 16L, 303L)
   it0 <- it1
   it0$min <- 0L
+  it0$max <- 4L
   x0 <- x1 - 1L                            # SAME information, 0..4 coding
   expect_equal(cier_even_odd(x1, it1)$value,
                cier_even_odd(x0, it0)$value, tolerance = 1e-12)
@@ -355,9 +359,9 @@ test_that("off-midpoint straightliner is scored, not abstained, with reverse-key
 
 # ---- Optional metadata defaults --------------------------------------------
 
-test_that("reverse_keyed and categories are optional when nothing is reverse-keyed", {
-  # `items` carrying only `scale` must equal an explicit all-FALSE / categories
-  # frame -- exercising the conditional-categories contract.
+test_that("reverse_keyed and max are optional when nothing is reverse-keyed", {
+  # `items` carrying only `scale` must equal an explicit all-FALSE / max
+  # frame -- exercising the conditional-max contract.
   it_scale_only <- data.frame(scale = rep(LETTERS[1:3], each = 4L))
   it_fwd <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(20L, 12L, 3L)
@@ -369,7 +373,7 @@ test_that("reverse_keyed and categories are optional when nothing is reverse-key
 
 test_that("a single-item scale is skipped; remaining scales still score", {
   it <- data.frame(scale = c("A", "B", "B", "C", "C"),
-                   reverse_keyed = FALSE, categories = 5L)
+                   reverse_keyed = FALSE, max = 5L)
   x <- matrix(c(3, 1, 5, 2, 4,
                 4, 2, 4, 1, 5), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
@@ -415,7 +419,7 @@ test_that("when every respondent abstains the cutoff warns and flags nobody", {
 # ---- Input validation (typed) ----------------------------------------------
 
 test_that("fewer than two distinct scales is a typed input error", {
-  it <- data.frame(scale = rep("A", 4L), reverse_keyed = FALSE, categories = 5L)
+  it <- data.frame(scale = rep("A", 4L), reverse_keyed = FALSE, max = 5L)
   x <- matrix(c(1, 2, 3, 4, 5, 4, 3, 2), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
   expect_error(cier_even_odd(x, it), class = "cier_error_input")
@@ -503,7 +507,7 @@ test_that("cier_even_odd matches careless::evenodd bytewise on no-reverse data",
   responses <- unname(as.matrix(raw))
   storage.mode(responses) <- "double"
   # 10 contiguous scales of 5 items; no reverse-keyed items (careless::evenodd
-  # does not reverse-key), so categories are not even required here.
+  # does not reverse-key), so max is not even required here.
   it <- data.frame(scale = rep(paste0("s", LETTERS[1:10]), each = 5L),
                    reverse_keyed = FALSE, stringsAsFactors = FALSE)
   ours <- cier_even_odd(responses, it)$value

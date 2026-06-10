@@ -205,4 +205,3 @@ cier_method_row <- function(method) {
   }
   reg[idx, , drop = FALSE]
 }
-

@@ -333,7 +333,7 @@ value (a straightliner's zero variance) counts as flagged.
 bfi <- as.matrix(bfi_careless[, 1:44])
 bfi_items <- data.frame(
   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", colnames(bfi)),
-  reverse_keyed = grepl("_R$", colnames(bfi)), categories = 5L)
+  reverse_keyed = grepl("_R$", colnames(bfi)), max = 5L)
 ls_v  <- cier_longstring(bfi)$value
 oec_v <- cier_even_odd(bfi, bfi_items)$value           # value = -SB(r)
 rir_v <- cier_personal_reliability(bfi, bfi_items, n_resamples = 100L,
@@ -447,7 +447,7 @@ battery_wave <- function(d, suffix = "") {
   }, logical(1))
   list(m = m, items = data.frame(scale = sub("[0-9]+$", "", base),
                                  reverse_keyed = unname(twin),
-                                 categories = 6L))
+                                 max = 6L))
 }
 battery_values <- function(w) {
   list(
@@ -612,7 +612,7 @@ for (pool in names(rpr_pools)) {
   its <- unlist(rpr_facets[fs], use.names = FALSE)
   m <- as.matrix(rd[, its]); storage.mode(m) <- "double"
   im <- data.frame(scale = rep(fs, lengths(rpr_facets[fs])),
-                   reverse_keyed = its %in% rpr_rev, categories = 5L)
+                   reverse_keyed = its %in% rpr_rev, max = 5L)
   vals <- list(PR = cier_even_odd(m, im)$value)
   for (nr in c(25L, 50L, 100L)) {
     vals[[paste0("RPR", nr)]] <- cier_personal_reliability(
@@ -634,7 +634,7 @@ round(stats::cor(
                 data.frame(scale = rep(rpr_pools[["6 facets"]],
                                        lengths(rpr_facets[1:6])),
                            reverse_keyed = f6 %in% rpr_rev,
-                           categories = 5L))$value,
+                           max = 5L))$value,
   rd$PR_F6, use = "pairwise.complete.obs"), 4)
 #> [1] -1
 ```
@@ -683,7 +683,7 @@ eo_items <- paste0("HE01_", c(  # the authors' scale-blocked item order
   "01_r", "25", "07", "31_r", "13", "37", "49_r", "19_r", "43", "55_r"))
 eo_meta <- data.frame(scale = rep(c("hh", "em", "ex", "ag", "co", "op"),
                                   each = 10),
-                      reverse_keyed = FALSE, categories = 5L)
+                      reverse_keyed = FALSE, max = 5L)
 
 draw_flags <- function(rows) {
   m <- recoded[rows, , drop = FALSE]

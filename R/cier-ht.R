@@ -26,11 +26,11 @@
 #' **mokken is required.** Ht is scored by [mokken::coefH()], so the `mokken`
 #' package must be installed; the index aborts with an informative error
 #' otherwise. Reverse-keyed items (`items$reverse_keyed`) are reverse-scored first
-#' with the self-inverse reflection `(min + max) - x` (where
-#' `max = min + categories - 1`, and `min` defaults to `1`, i.e. the classic
-#' `(categories + 1) - x`); scalability is then computed on the transposed scale.
+#' with the self-inverse reflection `(min + max) - x` (`min` defaults to `1`,
+#' i.e. the classic `(max + 1) - x`); scalability is then computed on the
+#' transposed scale.
 #' Supply the raw responses and declare reverse items through `items`. Only
-#' reverse-keyed items need a `categories` value (used to reverse-score them);
+#' reverse-keyed items need a `max` value (used to reverse-score them);
 #' `mokken` itself accepts a mix of category counts, so no common number of
 #' response categories is required. `mokken` does, however, impose a **ceiling
 #' of 10 response categories**: a scale whose responses span more than 10
@@ -71,12 +71,12 @@
 #' @param items A data.frame of item metadata, one row per item, aligned to the
 #'   columns of `responses`. An optional logical `reverse_keyed` column marks
 #'   reverse-keyed items (default: none); each reverse-keyed item additionally
-#'   needs an integer `categories` value (the number of response options, `>= 2`)
-#'   and an optional integer `min` (the scale base; default `1`, declare it for a
-#'   0-based or bipolar scale) so it can be reverse-scored. Forward-keyed items
-#'   need no metadata, and `categories` may be heterogeneous across items
-#'   (`mokken` does not require a common number of response categories, but it
-#'   caps every item at 10 categories -- see Details).
+#'   needs an integer `max` value (the largest response option; at least
+#'   `min + 1`) and an optional integer `min` (the scale base; default `1`,
+#'   declare it for a 0-based or bipolar scale) so it can be reverse-scored.
+#'   Forward-keyed items need no metadata, and `max` may be heterogeneous across
+#'   items (`mokken` does not require a common number of response categories,
+#'   but it caps every item at 10 categories -- see Details).
 #' @param fpr Optional target false-positive tail mass for the percentile cutoff.
 #'   `NULL` (default) uses the registry default `0.05`. A finite number in the open
 #'   interval `(0, 1)`; the cutoff is that lower-tail quantile of the observed
@@ -108,10 +108,10 @@
 #' @export
 #' @examplesIf requireNamespace("mokken", quietly = TRUE)
 #' # The 44 BFI items are the first 44 columns of the bundled example data; they
-#' # are 5-point items. Build item metadata from the column names: a trailing "_R"
-#' # marks a reverse-keyed item.
+#' # are 5-point items coded 1..5. Build item metadata from the column names: a
+#' # trailing "_R" marks a reverse-keyed item.
 #' nm <- names(bfi_careless)[1:44]
-#' items <- data.frame(reverse_keyed = grepl("_R$", nm), categories = 5L)
+#' items <- data.frame(reverse_keyed = grepl("_R$", nm), max = 5L)
 #' out <- cier_ht(bfi_careless[, 1:44], items)
 #' out
 #' head(as.data.frame(out))

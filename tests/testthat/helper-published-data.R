@@ -169,7 +169,7 @@ pubres_battery_wave <- function(d, suffix = "") {
   }, logical(1))
   list(m = m, items = data.frame(scale = sub("[0-9]+$", "", base),
                                  reverse_keyed = unname(twin),
-                                 categories = 6L))
+                                 max = 6L))
 }
 
 # All per-respondent index values for one wave: the five matrix-only indices,
@@ -339,7 +339,7 @@ pubres_rpr_cells <- function(d) {
     m <- as.matrix(d[, its])
     storage.mode(m) <- "double"
     im <- data.frame(scale = rep(fs, lengths(facets[fs])),
-                     reverse_keyed = its %in% rev_items, categories = 5L)
+                     reverse_keyed = its %in% rev_items, max = 5L)
     vals <- list(PR = cier_even_odd(m, im)$value)
     for (nr in c(25L, 50L, 100L)) {
       vals[[paste0("RPR", nr)]] <-
@@ -409,7 +409,7 @@ pubres_schroeders_cells <- function(d, iterations = 1000L) {
   eo_items <- pubres_schroeders_eo_items()
   eo_meta <- data.frame(scale = rep(c("hh", "em", "ex", "ag", "co", "op"),
                                     each = 10),
-                        reverse_keyed = FALSE, categories = 5L)
+                        reverse_keyed = FALSE, max = 5L)
   careless <- which(d$Careless == 1L)
   regular <- which(d$Careless == 0L)
   flags <- function(rows) {
@@ -460,7 +460,7 @@ pubres_bruhlmann_cells <- function() {
   items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1",
                                   colnames(bfi)),
                       reverse_keyed = grepl("_R$", colnames(bfi)),
-                      categories = 5L)
+                      max = 5L)
   ls <- cier_longstring(bfi)$value
   oec <- cier_even_odd(bfi, items)$value
   rir <- cier_personal_reliability(bfi, items, n_resamples = 100L,

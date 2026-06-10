@@ -73,7 +73,7 @@ nm   <- names(resp)
 items <- data.frame(
   scale         = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
   reverse_keyed = grepl("_R$", nm),
-  categories    = 5L
+  max           = 5L
 )
 
 cier_screen(resp, items,

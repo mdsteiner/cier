@@ -23,7 +23,7 @@ internally) of responses, one row per respondent and one column per item.
 columns of \code{responses}. Must carry a \code{scale} column with at least two
 distinct scale labels. An optional logical \code{reverse_keyed} column marks
 reverse-keyed items (default: none); when any item is reverse-keyed an
-integer \code{categories} column (the number of response options, \verb{>= 2}) is
+integer \code{max} column (the largest response option; at least \code{min + 1}) is
 required so those items can be reverse-scored. An optional integer \code{min}
 column gives the smallest response option (the scale base; default \code{1}).}
 
@@ -86,12 +86,12 @@ the previous RNG state is restored on return, so a seeded call reproduces
 deterministic and ignores \code{seed} and \code{n_resamples}.
 
 \strong{Reverse-keying.} Reverse-keyed items (\code{items$reverse_keyed}) are
-reverse-scored with the self-inverse reflection \code{(min + max) - x} (where
-\code{max = min + categories - 1}) \emph{before} the half-means are formed, so the index
-always sees trait-aligned responses. The scale base \code{min} defaults to \code{1} (the
-\verb{1..categories} coding), giving the classic \code{(categories + 1) - x}; declare
-\code{items$min} for a 0-based or bipolar scale. Supply the raw responses and
-declare reverse items through \code{items}; pre-scoring them and leaving
+reverse-scored with the self-inverse reflection \code{(min + max) - x} (with \code{max}
+the largest response option, \code{items$max}) \emph{before} the half-means are formed,
+so the index always sees trait-aligned responses. The scale base \code{min}
+defaults to \code{1} (the \verb{1..max} coding), giving the classic \code{(max + 1) - x};
+declare \code{items$min} for a 0-based or bipolar scale. Supply the raw responses
+and declare reverse items through \code{items}; pre-scoring them and leaving
 \code{reverse_keyed = FALSE} yields the same result.
 
 \strong{Cutoff.} The default flags the lowest-reliability respondents: the cutoff
@@ -122,12 +122,13 @@ identical, so it abstains -- so straightlining is best caught directly with
 
 \examples{
 # Build item metadata from the BFI-44 column names: the scale is the letter
-# run after "v_BFI_", a trailing "_R" marks a reverse-keyed item, 5 options.
+# run after "v_BFI_", a trailing "_R" marks a reverse-keyed item, and the
+# items are coded 1..5.
 nm <- names(bfi_careless)[1:44]
 items <- data.frame(
   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\\\1", nm),
   reverse_keyed = grepl("_R$", nm),
-  categories = 5L
+  max = 5L
 )
 # Resampled personal reliability (the default); set a seed for reproducibility.
 out <- cier_personal_reliability(bfi_careless[, 1:44], items, seed = 1)

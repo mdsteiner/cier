@@ -46,10 +46,11 @@ Every index is a function on the response matrix. Resampled personal reliability
 (RPR) is one of the stronger indirect indicators: it splits each scale in half many
 times and correlates the halves, so a respondent whose answers are internally
 inconsistent scores high. The consistency indices need some item metadata:
-which scale each item belongs to, whether it is reverse-keyed, and how many response
-options it has. Build that from the BFI column names: the scale is the letters after
-`v_BFI_`, a trailing `_R` marks a reverse-keyed item, and every item is a 5-point
-scale. (One caveat: the dataset authors' own analysis treated one item, `v_BFI_OP9_R`, as
+which scale each item belongs to, whether it is reverse-keyed, and the response
+range (`max`, the largest response option, plus `min` when the scale is not
+1-based). Build that from the BFI column names: the scale is the letters after
+`v_BFI_`, a trailing `_R` marks a reverse-keyed item, and every item is coded
+1..5. (One caveat: the dataset authors' own analysis treated one item, `v_BFI_OP9_R`, as
 keyed differently than its name suggests and corrected it; keying by the item names,
 as here, makes the consistency indices differ slightly from the paper's counts --
 `vignette("published-results")` documents the difference.)
@@ -60,7 +61,7 @@ nm   <- names(resp)
 items <- data.frame(
   scale         = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
   reverse_keyed = grepl("_R$", nm),
-  categories    = 5L
+  max           = 5L
 )
 
 rpr <- cier_personal_reliability(resp, items, seed = 1)
@@ -118,6 +119,35 @@ length(flagged)
 head(as.data.frame(screen))
 ```
 
+## Surveys that mix response formats
+
+The BFI above is the easy case: every item shares one 5-point format. Real
+surveys often mix 4-, 5-, 6-, and 7-point scales, and the battery handles that
+unevenly:
+
+- **Gnormed is the one hard limit.** Its `PerFit` backend scores a single
+  number of response options across all items (Niessen et al., 2016 had to
+  recode their items to a common 4-point scale for the same reason), so on
+  mixed-format data `cier_screen()` records `cier_gnormed` as skipped with that
+  reason and the rest of the battery still runs. To use Gnormed anyway, score a
+  same-format subset of items in a direct call.
+- **Every other index runs**, but read the results with care: the published
+  evidence for these indices comes almost entirely from uniform-format batteries.
+  Curran (2016), for example, describes even-odd consistency "across a series of
+  similar scales using the same response format", and `mokken` (behind `cier_ht`)
+  warns when items have different numbers of response categories. How well the
+  indices separate careless from careful respondents on mixed formats is largely
+  untested in the literature.
+- **Straightliners change shape on mixed formats.** A respondent who always
+  picks the same option *position* produces varying raw values once the scale
+  range changes between blocks, so the consistency indices score them (as
+  highly consistent) instead of abstaining. `cier_longstring` and `cier_irv`
+  still catch them -- another reason the screen runs the indices as a battery.
+- **The standalone sequence indices want same-format blocks.** Gottfried et
+  al. (2022) state for `cier_autocorrelation` that "only questions with the
+  same answer scales should be analyzed at one time"; on a mixed survey, score
+  each same-format block in its own call.
+
 ## Choosing a cutoff is a ranking decision, not a calibration
 
 Every percentile index cuts the tail at a target fraction (`fpr`, default 0.05). It
@@ -156,6 +186,17 @@ Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020). The quality
 data collected online: An investigation of careless responding in a crowdsourced
 sample. *Methods in Psychology, 2*, 100022.
 
+Curran, P. G. (2016). Methods for the detection of carelessly invalid responses in
+survey data. *Journal of Experimental Social Psychology, 66*, 4-19.
+
 Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis, J.
 (2024). Careless responding detection revisited: Accuracy of direct and indirect
 measures. *Behavior Research Methods, 56*(8), 8422-8449.
+
+Gottfried, J., Ježek, S., & Králová, M. (2022). Autocorrelation screening: A
+potentially efficient method for detecting repetitive response patterns in
+questionnaire data. *Practical Assessment, Research & Evaluation, 27*, Article 2.
+
+Niessen, A. S. M., Meijer, R. R., & Tendeiro, J. N. (2016). Detecting careless
+respondents in web-based questionnaires: Which method to use? *Journal of Research
+in Personality, 63*, 1-11.

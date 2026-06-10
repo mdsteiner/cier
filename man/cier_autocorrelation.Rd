@@ -87,7 +87,13 @@ row is excluded from the flag count and rate.
 
 \strong{Assumptions.} The index reads the response columns as an ordered sequence
 on a common response scale, so it is meaningful only when the columns are in
-administration order and share the same number of response options.
+administration order and share the same number of response options. This is
+the source paper's own scale-format guidance: "only questions with the same
+answer scales should be analyzed at one time", since mixing scales "with
+vastly different number ranges ... can bias the results to a great extent",
+and questions with unique scales or answer options (say gender or education)
+"should be excluded prior to screening" (Gottfried et al., 2022). On a
+mixed-format survey, score each same-format block in a separate call.
 }
 \section{What this catches}{
 

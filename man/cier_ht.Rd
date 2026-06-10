@@ -14,12 +14,12 @@ internally) of responses, one row per respondent and one column per item.
 \item{items}{A data.frame of item metadata, one row per item, aligned to the
 columns of \code{responses}. An optional logical \code{reverse_keyed} column marks
 reverse-keyed items (default: none); each reverse-keyed item additionally
-needs an integer \code{categories} value (the number of response options, \verb{>= 2})
-and an optional integer \code{min} (the scale base; default \code{1}, declare it for a
-0-based or bipolar scale) so it can be reverse-scored. Forward-keyed items
-need no metadata, and \code{categories} may be heterogeneous across items
-(\code{mokken} does not require a common number of response categories, but it
-caps every item at 10 categories -- see Details).}
+needs an integer \code{max} value (the largest response option; at least
+\code{min + 1}) and an optional integer \code{min} (the scale base; default \code{1},
+declare it for a 0-based or bipolar scale) so it can be reverse-scored.
+Forward-keyed items need no metadata, and \code{max} may be heterogeneous across
+items (\code{mokken} does not require a common number of response categories,
+but it caps every item at 10 categories -- see Details).}
 
 \item{fpr}{Optional target false-positive tail mass for the percentile cutoff.
 \code{NULL} (default) uses the registry default \code{0.05}. A finite number in the open
@@ -50,11 +50,11 @@ statistic is \strong{nonparametric} (no item response model is fitted).
 \strong{mokken is required.} Ht is scored by \code{\link[mokken:coefH]{mokken::coefH()}}, so the \code{mokken}
 package must be installed; the index aborts with an informative error
 otherwise. Reverse-keyed items (\code{items$reverse_keyed}) are reverse-scored first
-with the self-inverse reflection \code{(min + max) - x} (where
-\code{max = min + categories - 1}, and \code{min} defaults to \code{1}, i.e. the classic
-\code{(categories + 1) - x}); scalability is then computed on the transposed scale.
+with the self-inverse reflection \code{(min + max) - x} (\code{min} defaults to \code{1},
+i.e. the classic \code{(max + 1) - x}); scalability is then computed on the
+transposed scale.
 Supply the raw responses and declare reverse items through \code{items}. Only
-reverse-keyed items need a \code{categories} value (used to reverse-score them);
+reverse-keyed items need a \code{max} value (used to reverse-score them);
 \code{mokken} itself accepts a mix of category counts, so no common number of
 response categories is required. \code{mokken} does, however, impose a \strong{ceiling
 of 10 response categories}: a scale whose responses span more than 10
@@ -94,10 +94,10 @@ zero-variance row is unscalable); pair it with \code{\link[=cier_longstring]{cie
 \examples{
 \dontshow{if (requireNamespace("mokken", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 # The 44 BFI items are the first 44 columns of the bundled example data; they
-# are 5-point items. Build item metadata from the column names: a trailing "_R"
-# marks a reverse-keyed item.
+# are 5-point items coded 1..5. Build item metadata from the column names: a
+# trailing "_R" marks a reverse-keyed item.
 nm <- names(bfi_careless)[1:44]
-items <- data.frame(reverse_keyed = grepl("_R$", nm), categories = 5L)
+items <- data.frame(reverse_keyed = grepl("_R$", nm), max = 5L)
 out <- cier_ht(bfi_careless[, 1:44], items)
 out
 head(as.data.frame(out))

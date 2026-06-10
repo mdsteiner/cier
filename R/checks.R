@@ -243,50 +243,61 @@ check_items_reverse <- function(items, n_items, arg, call) {
   rk
 }
 
-# `categories`: number of response options per item. Required -- a finite whole
-# number >= 2 -- only on items that are reverse-keyed (so they can be
-# reverse-scored as (min + max) - x, the classic (categories + 1) - x when the
-# scale base min is 1; check_items_min below validates the base); NA is
-# permitted on forward items and the column may be absent entirely when nothing
-# is reverse-keyed. Returns the column unchanged (or NULL when absent).
-check_items_categories <- function(items, reverse_keyed, arg, call) {
-  cats <- items$categories
+# Predicate: a numeric vector of finite whole numbers (no NA / NaN / Inf, every
+# element integer-valued). The shared core of every items-column validator --
+# `max`, `min`, and their person-fit variants each layer their own bound or
+# scope on top of it. `is.numeric()` is first so a non-numeric (or NULL) input
+# short-circuits to FALSE before the finiteness / rounding predicates run.
+is_finite_whole <- function(v) {
+  is.numeric(v) && all(is.finite(v)) && all(v == round(v))
+}
+
+# `max`: the largest response option per item. Required -- a finite whole
+# number of at least `min + 1` (two response options) -- only on items that are
+# reverse-keyed (so they can be reverse-scored with the self-inverse reflection
+# (min + max) - x; `mins` is the RESOLVED base from check_items_min, default 1);
+# NA is permitted on forward items and the column may be absent entirely when
+# nothing is reverse-keyed. Returns the column unchanged (or NULL when absent).
+check_items_max <- function(items, reverse_keyed, mins, arg, call) {
+  maxs <- items$max
   if (!any(reverse_keyed)) {
-    return(cats)
+    return(maxs)
   }
-  rev_cats <- if (is.null(cats)) NA_real_ else cats[reverse_keyed]
-  # is.finite() rejects NA, NaN, and Inf in one predicate -- a non-finite
-  # category count would reflect to (Inf + 1) - x and poison the reverse columns.
-  ok <- is.numeric(rev_cats) && all(is.finite(rev_cats)) &&
-    all(rev_cats >= 2) && all(rev_cats == round(rev_cats))
+  rev_maxs <- if (is.null(maxs)) NA_real_ else maxs[reverse_keyed]
+  # is_finite_whole() rejects NA, NaN, and Inf (a non-finite maximum would
+  # reflect to (min + Inf) - x and poison the reverse columns) and non-integers.
+  # The bound is min + 1, NOT an absolute 2: a 0/1 item (min 0, max 1) is the
+  # smallest valid scale.
+  ok <- is_finite_whole(rev_maxs) && all(rev_maxs >= mins[reverse_keyed] + 1)
   if (!ok) {
     cier_abort(
       "cier_error_input",
-      c("Reverse-keyed items need an integer {.field categories} of at least 2.",
-        "i" = "Set {.field categories} (the number of response options) for \\
-               every reverse-keyed item."),
+      c("Reverse-keyed items need an integer {.field max} of at least \\
+         {.field min} + 1.",
+        "i" = "Set {.field max} (the largest response option) for every \\
+               reverse-keyed item; {.field min} (the smallest, default 1) is \\
+               read alongside it for the reflection (min + max) - x."),
       data = list(arg = arg), call = call
     )
   }
-  cats
+  maxs
 }
 
 # `min`: the response-scale minimum (base). Optional; defaults to 1 (the
-# 1..categories coding) when the column is absent. When supplied it generalises
-# the reverse-keying reflection to (min + max) - x (max = min + categories - 1),
-# so a 0-based or bipolar scale reflects onto itself. Validated like categories --
-# a finite whole number on every reverse-keyed item (any integer base: 0,
-# negative, and bipolar are allowed; there is no >= 2 bound) -- with NA permitted
-# on forward items. Returns the column, or rep(1L, n_items) when absent.
+# 1..max coding) when the column is absent. When supplied it generalises
+# the reverse-keying reflection (min + max) - x, so a 0-based or bipolar scale
+# reflects onto itself. Validated like max -- a finite whole number on every
+# reverse-keyed item (any integer base: 0, negative, and bipolar are allowed;
+# there is no lower bound) -- with NA permitted on forward items. Resolved
+# BEFORE max, whose >= min + 1 bound reads it. Returns the column, or
+# rep(1L, n_items) when absent.
 check_items_min <- function(items, reverse_keyed, n_items, arg, call) {
   mins <- items$min
   if (is.null(mins)) {
     return(rep(1L, n_items))
   }
   rev_mins <- mins[reverse_keyed]
-  ok <- length(rev_mins) == 0L ||
-    (is.numeric(rev_mins) && all(is.finite(rev_mins)) &&
-       all(rev_mins == round(rev_mins)))
+  ok <- length(rev_mins) == 0L || is_finite_whole(rev_mins)
   if (!ok) {
     cier_abort(
       "cier_error_input",
@@ -326,68 +337,103 @@ check_items_frame <- function(items, n_items, arg, call) {
 # Validate the per-item `items` frame the split-half family uses (even-odd and
 # personal reliability). `items` is a data.frame with one row per item, aligned
 # to the columns of `responses`. Returns a normalized
-# list(scale, reverse_keyed, categories, min) on success; aborts cier_error_input
-# on any malformed field. `categories` is NULL when its column is absent
+# list(scale, reverse_keyed, min, max) on success; aborts cier_error_input
+# on any malformed field. `max` is NULL when its column is absent
 # (permitted only when nothing is reverse-keyed); `min` defaults to all-1.
 check_items <- function(items, n_items, min_scales = 2L,
                         arg = "items", call = rlang::caller_env()) {
   check_items_frame(items, n_items, arg, call)
   scale <- check_items_scale(items, min_scales, arg, call)
   reverse_keyed <- check_items_reverse(items, n_items, arg, call)
-  categories <- check_items_categories(items, reverse_keyed, arg, call)
   minimum <- check_items_min(items, reverse_keyed, n_items, arg, call)
+  maximum <- check_items_max(items, reverse_keyed, minimum, arg, call)
   list(scale = scale, reverse_keyed = reverse_keyed,
-       categories = categories, min = minimum)
+       min = minimum, max = maximum)
 }
 
 # Validate the per-item `items` frame cier_ht() uses. Ht needs item metadata ONLY
 # to reverse-score keyed items: mokken::coefH accepts a mix of category counts and
-# the kernel never reads `categories` directly, so -- unlike the Gnormed bridge --
-# categories need not be homogeneous and are required only on reverse-keyed items
-# (so they can be reverse-scored), exactly like the split-half family but without
-# the `scale` requirement. Returns a normalized list(reverse_keyed, categories,
-# min); `categories` is NULL when its column is absent (permitted when nothing is
-# reverse-keyed) and `min` defaults to all-1.
+# the kernel never reads `max` directly, so -- unlike the Gnormed bridge --
+# the response ranges need not be homogeneous and `max` is required only on
+# reverse-keyed items (so they can be reverse-scored), exactly like the
+# split-half family but without the `scale` requirement. Returns a normalized
+# list(reverse_keyed, min, max); `max` is NULL when its column is absent
+# (permitted when nothing is reverse-keyed) and `min` defaults to all-1.
 check_items_ht <- function(items, n_items, arg = "items",
                            call = rlang::caller_env()) {
   check_items_frame(items, n_items, arg, call)
   reverse_keyed <- check_items_reverse(items, n_items, arg, call)
-  categories <- check_items_categories(items, reverse_keyed, arg, call)
   minimum <- check_items_min(items, reverse_keyed, n_items, arg, call)
-  list(reverse_keyed = reverse_keyed, categories = categories, min = minimum)
+  maximum <- check_items_max(items, reverse_keyed, minimum, arg, call)
+  list(reverse_keyed = reverse_keyed, min = minimum, max = maximum)
 }
 
-# `categories` for the person-fit backends: required on EVERY item (not only
-# reverse-keyed ones) and a single homogeneous integer >= 2 -- PerFit's and
-# mokken's polytomous statistics work on one number of response categories
-# (Ncat). Returns the per-item vector on success.
-check_items_categories_homogeneous <- function(items, arg, call) {
-  cats <- items$categories
-  ok <- !is.null(cats) && is.numeric(cats) && all(is.finite(cats)) &&
-    all(cats >= 2) && all(cats == round(cats)) && length(unique(cats)) == 1L
+# `max` for the person-fit (Gnormed) bridge: required on EVERY item (not only
+# reverse-keyed ones) -- a finite whole number of at least `min + 1` -- because
+# reverse-keying, per-item zero-basing, and the category count
+# Ncat = max - min + 1 all read it. Per-item validity is a PLAIN input error;
+# the span homogeneity PerFit additionally needs is classified separately in
+# check_items_span_homogeneous(). Returns the per-item vector on success.
+check_items_max_personfit <- function(items, mins, arg, call) {
+  maxs <- items$max
+  # is_finite_whole() returns FALSE for an absent (NULL) column, so the missing
+  # `max` case is caught here without a separate is.null() guard.
+  ok <- is_finite_whole(maxs) && all(maxs >= mins + 1)
   if (!ok) {
     cier_abort(
       "cier_error_input",
-      c("{.arg {arg}} needs a homogeneous integer {.field categories} >= 2 on \\
-         every item.",
-        "i" = "The person-fit statistics use one number of response categories \\
-               (Ncat) across all items."),
+      c("{.arg {arg}} needs an integer {.field max} of at least \\
+         {.field min} + 1 on every item.",
+        "i" = "{.field max} is the largest response option; {.field min} (the \\
+               smallest, default 1) is read alongside it."),
       data = list(arg = arg), call = call
     )
   }
-  cats
+  maxs
+}
+
+# The span homogeneity PerFit's polytomous statistics require: ONE number of
+# response categories, Ncat = max - min + 1, across all items (items may still
+# differ in base: 1..5 and 0..4 both have five options). A heterogeneous span
+# on otherwise-valid metadata is NOT a malformed frame -- it is accurate
+# metadata for genuinely mixed-format data that the PerFit backend cannot
+# score -- so the abort carries the cier_error_backend_limit subclass
+# (mirroring mokken's 10-category ceiling in kernel_ht) and cier_screen()
+# records the index as skipped-with-reason instead of aborting the battery.
+# It takes the validated `maxs` returned by check_items_max_personfit (not the
+# raw column), so a malformed max can never reach the span arithmetic and be
+# misclassified as a backend limit. Returns the shared category count Ncat
+# (max - min + 1), which the wrapper threads to the kernel -- the single place
+# Ncat is derived.
+check_items_span_homogeneous <- function(maxs, mins, arg, call) {
+  spans <- maxs - mins
+  if (length(unique(spans)) != 1L) {
+    cier_abort(
+      c("cier_error_backend_limit", "cier_error_input"),
+      c("Gnormed cannot score items with different numbers of response \\
+         categories.",
+        "x" = "Observed numbers of options ({.field max} - {.field min} + 1): \\
+               {.val {sort(unique(spans)) + 1}}.",
+        "i" = "The PerFit backend scores one Ncat across all items; screen \\
+               homogeneous item subsets separately, or use another index."),
+      data = list(arg = arg, observed = sort(unique(spans)) + 1,
+                  reason = "mixed response-category counts (PerFit scores a single Ncat)"),
+      call = call
+    )
+  }
+  as.integer(spans[[1L]] + 1L)
 }
 
 # `min` for the person-fit backends: the scale base, used to reverse-key AND to
 # zero-base EVERY item (unlike the split-half family, which keys only reverse
 # items), so it must be a finite whole number on every item. Optional; defaults
-# to all-1 (the 1..categories coding) when the column is absent.
+# to all-1 (the 1..max coding) when the column is absent.
 check_items_min_personfit <- function(items, n_items, arg, call) {
   mins <- items$min
   if (is.null(mins)) {
     return(rep(1L, n_items))
   }
-  ok <- is.numeric(mins) && all(is.finite(mins)) && all(mins == round(mins))
+  ok <- is_finite_whole(mins)
   if (!ok) {
     cier_abort(
       "cier_error_input",
@@ -400,18 +446,23 @@ check_items_min_personfit <- function(items, n_items, arg, call) {
   mins
 }
 
-# Validate the per-item `items` frame the person-fit bridges use (Gnormed, Ht).
-# Unlike the split-half family these need a single homogeneous `categories`
-# (PerFit / mokken are single-Ncat) on EVERY item and do NOT use `scale`. Returns
-# a normalized list(reverse_keyed, categories, min); aborts cier_error_input on
-# any malformed field.
+# Validate the per-item `items` frame the Gnormed bridge uses. Unlike the
+# split-half family this needs `max` on EVERY item, a homogeneous span
+# (PerFit is single-Ncat), and does NOT use `scale`. Returns a normalized
+# list(reverse_keyed, min, max, ncat); aborts cier_error_input on any malformed
+# field, with the heterogeneous-span case additionally carrying
+# cier_error_backend_limit (see check_items_span_homogeneous). `ncat` is the
+# shared category count, computed once here and threaded to the kernel so it is
+# never re-derived. The span check takes the VALIDATED `maximum`, so the
+# per-item-validity-before-homogeneity order is enforced by the data flow.
 check_items_personfit <- function(items, n_items, arg = "items",
                                   call = rlang::caller_env()) {
   check_items_frame(items, n_items, arg, call)
-  categories <- check_items_categories_homogeneous(items, arg, call)
   reverse_keyed <- check_items_reverse(items, n_items, arg, call)
   minimum <- check_items_min_personfit(items, n_items, arg, call)
-  list(reverse_keyed = reverse_keyed, categories = categories, min = minimum)
+  maximum <- check_items_max_personfit(items, minimum, arg, call)
+  ncat <- check_items_span_homogeneous(maximum, minimum, arg, call)
+  list(reverse_keyed = reverse_keyed, min = minimum, max = maximum, ncat = ncat)
 }
 
 # Thin, mockable wrapper around requireNamespace() so tests can simulate an

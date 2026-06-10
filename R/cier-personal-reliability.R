@@ -42,12 +42,12 @@
 #' deterministic and ignores `seed` and `n_resamples`.
 #'
 #' **Reverse-keying.** Reverse-keyed items (`items$reverse_keyed`) are
-#' reverse-scored with the self-inverse reflection `(min + max) - x` (where
-#' `max = min + categories - 1`) *before* the half-means are formed, so the index
-#' always sees trait-aligned responses. The scale base `min` defaults to `1` (the
-#' `1..categories` coding), giving the classic `(categories + 1) - x`; declare
-#' `items$min` for a 0-based or bipolar scale. Supply the raw responses and
-#' declare reverse items through `items`; pre-scoring them and leaving
+#' reverse-scored with the self-inverse reflection `(min + max) - x` (with `max`
+#' the largest response option, `items$max`) *before* the half-means are formed,
+#' so the index always sees trait-aligned responses. The scale base `min`
+#' defaults to `1` (the `1..max` coding), giving the classic `(max + 1) - x`;
+#' declare `items$min` for a 0-based or bipolar scale. Supply the raw responses
+#' and declare reverse items through `items`; pre-scoring them and leaving
 #' `reverse_keyed = FALSE` yields the same result.
 #'
 #' **Cutoff.** The default flags the lowest-reliability respondents: the cutoff
@@ -81,7 +81,7 @@
 #'   columns of `responses`. Must carry a `scale` column with at least two
 #'   distinct scale labels. An optional logical `reverse_keyed` column marks
 #'   reverse-keyed items (default: none); when any item is reverse-keyed an
-#'   integer `categories` column (the number of response options, `>= 2`) is
+#'   integer `max` column (the largest response option; at least `min + 1`) is
 #'   required so those items can be reverse-scored. An optional integer `min`
 #'   column gives the smallest response option (the scale base; default `1`).
 #' @param resample Logical: `TRUE` (default) computes the resampled variant
@@ -122,12 +122,13 @@
 #' @export
 #' @examples
 #' # Build item metadata from the BFI-44 column names: the scale is the letter
-#' # run after "v_BFI_", a trailing "_R" marks a reverse-keyed item, 5 options.
+#' # run after "v_BFI_", a trailing "_R" marks a reverse-keyed item, and the
+#' # items are coded 1..5.
 #' nm <- names(bfi_careless)[1:44]
 #' items <- data.frame(
 #'   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
 #'   reverse_keyed = grepl("_R$", nm),
-#'   categories = 5L
+#'   max = 5L
 #' )
 #' # Resampled personal reliability (the default); set a seed for reproducibility.
 #' out <- cier_personal_reliability(bfi_careless[, 1:44], items, seed = 1)

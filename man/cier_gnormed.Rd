@@ -12,8 +12,9 @@ internally) of responses, one row per respondent and one column per item.
 \code{NA} marks a missing response.}
 
 \item{items}{A data.frame of item metadata, one row per item, aligned to the
-columns of \code{responses}. Must carry an integer \code{categories} column (the number
-of response options) that is the \strong{same} value (\verb{>= 2}) on every item. An
+columns of \code{responses}. Must carry an integer \code{max} column (the largest
+response option) on every item, with the \strong{same} span \code{max - min} on every
+item (PerFit's single \code{Ncat}; at least two options, \code{max >= min + 1}). An
 optional logical \code{reverse_keyed} column marks reverse-keyed items (default:
 none). An optional integer \code{min} column gives the smallest response option
 (the scale base; default \code{1}) -- declare it for a 0-based or bipolar scale.}
@@ -51,12 +52,18 @@ response model is fitted).
 \strong{PerFit is required.} Gnormed is scored by \code{\link[PerFit:Gnormed.poly]{PerFit::Gnormed.poly()}}, so the
 \code{PerFit} package must be installed; the index aborts with an informative error
 otherwise. Reverse-keyed items (\code{items$reverse_keyed}) are reverse-scored first
-with the self-inverse reflection \code{(min + max) - x} (where
-\code{max = min + categories - 1}, and \code{min} defaults to \code{1}, i.e. the classic
-\code{(categories + 1) - x}); the responses are then recoded to PerFit's documented
-\verb{0..(Ncat - 1)} contract. Supply the raw responses and declare reverse items
-through \code{items}. PerFit requires a single number of response categories, so
-\code{items$categories} must be the same integer (\verb{>= 2}) on every item.
+with the self-inverse reflection \code{(min + max) - x} (\code{min} defaults to \code{1},
+i.e. the classic \code{(max + 1) - x}); the responses are then recoded to PerFit's
+documented \verb{0..(Ncat - 1)} contract. Supply the raw responses and declare
+reverse items through \code{items}. PerFit scores a \strong{single number of response
+categories} (\code{Ncat = max - min + 1}), so every item must have the same
+\code{max - min} span -- items may still differ in base (a \verb{1..5} and a \verb{0..4}
+item both have five options and score together). Genuinely mixed-format
+data (say four- and seven-option items) is a \strong{backend limit}, not a
+metadata mistake: the typed error carries a dedicated subclass, and
+\code{\link[=cier_screen]{cier_screen()}} records Gnormed as skipped with that reason instead of
+aborting the battery -- score homogeneous item subsets separately if you
+need Gnormed on such data.
 
 \strong{Cutoff -- the PerFit Monte-Carlo null.} Unlike the sample-percentile
 indices, Gnormed's default cutoff is referenced to a \strong{simulated null}: PerFit
@@ -73,12 +80,11 @@ on the score).
 
 \strong{The sample must span the declared scale.} PerFit's item-step popularities
 are undefined when a scale end never occurs, so the complete-case block must
-\strong{attain both extremes}: the lowest and the highest of the declared
-\code{categories} must each be chosen at least once somewhere in the sample. A
-perfectly valid dataset in which, say, nobody ever picked the top category
-raises a typed error rather than scoring -- check \code{categories} / \code{min}
-against the data, or expect this on small samples with rarely-endorsed
-extreme categories.
+\strong{attain both extremes}: the declared \code{min} and \code{max} must each be chosen
+at least once somewhere in the sample. A perfectly valid dataset in which,
+say, nobody ever picked the top category raises a typed error rather than
+scoring -- check \code{max} / \code{min} against the data, or expect this on small
+samples with rarely-endorsed extreme categories.
 
 \strong{Abstention.} Because \code{\link[PerFit:Gnormed.poly]{PerFit::Gnormed.poly()}} needs complete data, a
 respondent with \strong{any} missing cell is excluded: both \code{value} and \code{flagged}
@@ -100,10 +106,10 @@ straightlining evades this index -- pair it with \code{\link[=cier_longstring]{c
 \examples{
 \dontshow{if (requireNamespace("PerFit", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 # The 44 BFI items are the first 44 columns of the bundled example data; they
-# are 5-point items. Build item metadata from the column names: a trailing "_R"
-# marks a reverse-keyed item.
+# are 5-point items coded 1..5. Build item metadata from the column names: a
+# trailing "_R" marks a reverse-keyed item.
 nm <- names(bfi_careless)[1:44]
-items <- data.frame(reverse_keyed = grepl("_R$", nm), categories = 5L)
+items <- data.frame(reverse_keyed = grepl("_R$", nm), max = 5L)
 out <- cier_gnormed(bfi_careless[, 1:44], items, seed = 1)
 out
 head(as.data.frame(out))

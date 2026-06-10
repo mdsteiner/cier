@@ -177,12 +177,12 @@ test_that("the synonym / antonym branch selects on the correct sign of r", {
 
 test_that("the wrapper is matrix-only: no item-metadata channel exists", {
   # Pins keying-insensitivity structurally: there is no items / scale /
-  # reverse_keyed / categories argument, so a reverse-keying-before-pairing
+  # reverse_keyed / max argument, so a reverse-keying-before-pairing
   # mutant cannot be wired in. Pairing uses the raw responses.
   fmls <- names(formals(cier_psychsyn))
   expect_setequal(fmls, c("responses", "critical_r", "fpr", "cutoff"))
   expect_false(any(c("items", "scale", "reverse_keyed",
-                     "categories") %in% fmls))
+                     "max") %in% fmls))
 })
 
 test_that("scored synonym values are finite, within [-1, 1], and vary per respondent", {

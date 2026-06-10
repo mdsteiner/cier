@@ -29,12 +29,13 @@ poly_matrix <- function(n = 60L, p = 12L, ncat = 5L, seed = 21L) {
   m
 }
 
-# Item metadata for cier_ht(): homogeneous `categories`, optional `reverse_keyed`.
-# The same data.frame doubles as the oracle's `data$items` (the oracle reads
-# items$reverse_keyed and items$categories).
+# Item metadata for cier_ht(): 1-based fixtures (1..ncat, so `max = ncat`),
+# optional `reverse_keyed`. The same data.frame doubles as the oracle's
+# `data$items` (the oracle reads items$reverse_keyed and items$max under its
+# own 1-based contract).
 poly_items <- function(p = 12L, reverse = FALSE, ncat = 5L) {
   rk <- if (length(reverse) == 1L) rep(reverse, p) else reverse
-  data.frame(reverse_keyed = rk, categories = ncat)
+  data.frame(reverse_keyed = rk, max = ncat)
 }
 
 # Production-equivalent hand call of the mokken scorer on a complete,
@@ -149,7 +150,7 @@ test_that("the scale base (items$min) is honoured for keying and zero-basing", {
   # Min-invariance: the same responses in 1..ncat coding (min = 1, default) and
   # in 0..(ncat-1) coding (min = 0) must score identically -- with a reverse-keyed
   # item present so the (min + max) - x reflection is exercised, not just the
-  # zero-base. A wrapper that hardcodes `(categories + 1) - x` reflection
+  # zero-base. A wrapper that hardcodes `(max + 1) - x` reflection
   # (ignoring min) diverges on the 0-based scale. The ported oracle hardcodes a
   # base of 1, so this is asserted as an internal invariance.
   skip_if_not_installed("mokken")
@@ -157,7 +158,7 @@ test_that("the scale base (items$min) is honoured for keying and zero-basing", {
   m1 <- poly_matrix(n = 50L, p = 10L, ncat = 5L, seed = 31L)   # 1..5 coding
   items1 <- poly_items(10L, reverse = rk)                       # min defaults 1
   m0 <- m1 - 1L                                                 # 0..4 coding
-  items0 <- data.frame(reverse_keyed = rk, categories = 5L, min = 0L)
+  items0 <- data.frame(reverse_keyed = rk, max = 4L, min = 0L)
   expect_equal(cier_ht(m1, items1, cutoff = 0)$value,
                cier_ht(m0, items0, cutoff = 0)$value,
                tolerance = 0)
@@ -330,30 +331,56 @@ test_that("a non-matrix / non-numeric / non-finite payload is a typed input erro
   expect_error(cier_ht(bad, poly_items(6L)), class = "cier_error_input")
 })
 
-test_that("Ht requires `categories` only on reverse-keyed items", {
+test_that("Ht requires `max` only on reverse-keyed items", {
   # mokken::coefH accepts a mix of category counts and the kernel never reads
-  # `categories`, so -- unlike Gnormed's single-Ncat contract -- Ht needs it only
+  # `max`, so -- unlike Gnormed's single-Ncat contract -- Ht needs it only
   # to reverse-score keyed items. A reverse-keyed item with an absent / NA /
-  # below-2 `categories` is a typed error (it cannot be reverse-scored).
+  # at-or-below-min `max` is a typed error (it cannot be reverse-scored).
   m <- poly_matrix(n = 10L, p = 6L)
   rev_last <- c(rep(FALSE, 5L), TRUE)
-  no_cats <- data.frame(reverse_keyed = rev_last)
-  na_cat <- data.frame(reverse_keyed = rev_last, categories = c(5, 5, 5, 5, 5, NA))
-  low_cat <- data.frame(reverse_keyed = rev_last, categories = c(5, 5, 5, 5, 5, 1))
-  expect_error(cier_ht(m, no_cats), class = "cier_error_input")
-  expect_error(cier_ht(m, na_cat), class = "cier_error_input")
-  expect_error(cier_ht(m, low_cat), class = "cier_error_input")
+  no_max <- data.frame(reverse_keyed = rev_last)
+  na_max <- data.frame(reverse_keyed = rev_last, max = c(5, 5, 5, 5, 5, NA))
+  low_max <- data.frame(reverse_keyed = rev_last, max = c(5, 5, 5, 5, 5, 1))
+  frac_max <- data.frame(reverse_keyed = rev_last, max = c(5, 5, 5, 5, 5, 2.5))
+  inf_max <- data.frame(reverse_keyed = rev_last, max = c(5, 5, 5, 5, 5, Inf))
+  expect_error(cier_ht(m, no_max), class = "cier_error_input")
+  expect_error(cier_ht(m, na_max), class = "cier_error_input")
+  expect_error(cier_ht(m, low_max), class = "cier_error_input")
+  expect_error(cier_ht(m, frac_max), class = "cier_error_input")
+  expect_error(cier_ht(m, inf_max), class = "cier_error_input")
 })
 
-test_that("Ht accepts forward-only items without (or with heterogeneous) categories", {
-  # No reverse keys -> `categories` is never used for scoring, so an absent or
-  # heterogeneous `categories` column must be accepted (mokken handles mixed
+test_that("Ht allows NA max / min on forward items in a mixed battery", {
+  # max / min are read only for the reflection of keyed items, so NA on a
+  # FORWARD item must not abort a battery that does contain a reverse item
+  # (a require-on-every-item validator would be over-strict).
+  skip_if_not_installed("mokken")
+  m <- poly_matrix(n = 30L, p = 6L)
+  it <- data.frame(reverse_keyed = c(rep(FALSE, 5L), TRUE),
+                   max = c(NA, 5, 5, 5, 5, 5), min = c(NA, 1, 1, 1, 1, 1))
+  expect_s3_class(cier_ht(m, it, cutoff = 0), "cier_index")
+})
+
+test_that("a reverse-keyed two-option item (min = 0, max = 1) is accepted", {
+  # max >= min + 1 is the bound: a 0/1 reverse item reflects by (0 + 1) - x.
+  # A validator demanding max >= 2 regardless of min would reject it.
+  skip_if_not_installed("mokken")
+  m <- poly_matrix(n = 30L, p = 6L)              # items 1-5: 1..5 coding
+  m[, 6L] <- m[, 6L] %% 2                        # item 6: 0/1 coding
+  it <- data.frame(reverse_keyed = c(rep(FALSE, 5L), TRUE),
+                   max = c(rep(5L, 5L), 1L), min = c(rep(1L, 5L), 0L))
+  expect_s3_class(cier_ht(m, it, cutoff = 0), "cier_index")
+})
+
+test_that("Ht accepts forward-only items without (or with heterogeneous) max", {
+  # No reverse keys -> `max` is never used for scoring, so an absent or
+  # heterogeneous `max` column must be accepted (mokken handles mixed
   # scales); the homogeneity Gnormed needs is not Ht's contract.
   skip_if_not_installed("mokken")
   m <- poly_matrix(n = 30L, p = 6L)
   expect_s3_class(cier_ht(m, data.frame(reverse_keyed = rep(FALSE, 6L)),
                           cutoff = 0), "cier_index")
-  expect_s3_class(cier_ht(m, data.frame(categories = c(5, 5, 5, 5, 5, 4)),
+  expect_s3_class(cier_ht(m, data.frame(max = c(5, 5, 5, 5, 5, 4)),
                           cutoff = 0), "cier_index")
 })
 
@@ -398,7 +425,7 @@ test_that("a 10-point scale (the ceiling boundary) still scores", {
 
 test_that("a wrong number of item rows is a typed input error", {
   m <- poly_matrix(n = 10L, p = 6L)
-  expect_error(cier_ht(m, data.frame(categories = rep(5, 3L))),
+  expect_error(cier_ht(m, data.frame(max = rep(5, 3L))),
                class = "cier_error_input")
 })
 
@@ -408,7 +435,7 @@ test_that("a non-data.frame items or a non-integer min (reverse item) is a typed
   # `min` (the scale base) is validated on reverse-keyed items, where it sets the
   # reflection base; a fractional min on a reverse item is a typed error.
   bad_min <- data.frame(reverse_keyed = c(rep(FALSE, 5L), TRUE),
-                        categories = 5L, min = c(1, 1, 1, 1, 1, 1.5))
+                        max = 5L, min = c(1, 1, 1, 1, 1, 1.5))
   expect_error(cier_ht(m, bad_min), class = "cier_error_input")
 })
 

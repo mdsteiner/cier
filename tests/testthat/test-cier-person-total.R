@@ -130,13 +130,13 @@ test_that("the statistic is item-TOTAL, not item-rest (leave-one-out)", {
 
 test_that("the wrapper is matrix-only: no item-metadata channel exists", {
   # Pins keying-insensitivity and whole-sample (not scale-level) means
-  # structurally: there is no items / scale / reverse_keyed / categories
+  # structurally: there is no items / scale / reverse_keyed / max
   # argument, so neither a reverse-keying nor a scale-means mutant can be wired
   # in. The whole-sample colMeans definition is enforced by the oracle parity.
   fmls <- names(formals(cier_person_total))
   expect_setequal(fmls, c("responses", "fpr", "cutoff"))
   expect_false(any(c("items", "scale", "reverse_keyed",
-                     "categories") %in% fmls))
+                     "max") %in% fmls))
 })
 
 test_that("scored person-total values are finite and within [-1, 1]", {

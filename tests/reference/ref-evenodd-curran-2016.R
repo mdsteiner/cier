@@ -15,7 +15,7 @@
 #   (so HIGHER values flag carelessness, matching careless v1.2.0+).
 #
 # The oracle assumes trait-aligned input: callers that exercise reverse-keying
-# must reverse-score the matrix independently ((categories + 1) - x) before
+# must reverse-score the matrix independently ((min + max) - x) before
 # passing it here, so the keying and the Curran (2016) statistic are checked from
 # separate sources.
 

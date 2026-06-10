@@ -51,7 +51,7 @@
 #' # randomised pieces (RPR, Gnormed's Monte-Carlo null) for reproducibility.
 #' nm <- names(bfi_careless)[1:44]
 #' items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
-#'                     reverse_keyed = grepl("_R$", nm), categories = 5L)
+#'                     reverse_keyed = grepl("_R$", nm), max = 5L)
 #' screen <- cier_screen(bfi_careless[, 1:44], items,
 #'                       control = list(cier_personal_reliability = list(seed = 1),
 #'                                      cier_gnormed = list(seed = 1)))

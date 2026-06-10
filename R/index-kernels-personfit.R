@@ -63,7 +63,7 @@ personfit_zero_base <- function(block, mins, ncat, call) {
       "cier_error_input",
       c("After zero-basing, every response must lie in {.val 0..(Ncat - 1)}.",
         "x" = "Observed zero-based range: {.val {rng}}.",
-        "i" = "Ncat = {ncat}; check {.field categories} / {.field min} against \\
+        "i" = "Ncat = {ncat}; check {.field max} / {.field min} against \\
                the data."),
       data = list(arg = "responses", observed = rng, ncat = ncat),
       call = call
@@ -76,7 +76,7 @@ personfit_zero_base <- function(block, mins, ncat, call) {
          of the {ncat} categories must each occur at least once.",
         "x" = "Observed zero-based range: {.val {rng}} (need {.val {0L}} and \\
                {.val {ncat - 1L}}).",
-        "i" = "Check {.field categories} / {.field min}, or that the sample spans \\
+        "i" = "Check {.field max} / {.field min}, or that the sample spans \\
                every category (PerFit cannot score a scale with an unused end)."),
       data = list(arg = "responses", observed = rng, ncat = ncat),
       call = call
@@ -93,9 +93,12 @@ personfit_zero_base <- function(block, mins, ncat, call) {
 # denominator needs >= 3 items); `fit` is the fitted PerFit object for the
 # complete block (NULL when the index abstains wholesale), reused by the
 # Monte-Carlo null cutoff so the simulation is not refitted. `responses` has
-# already been reverse-keyed by the wrapper. PerFit's printed progress is
-# captured so only typed cli conditions reach the user.
-kernel_gnormed <- function(responses, categories, mins, call) {
+# already been reverse-keyed by the wrapper. `ncat` is the validated shared
+# category count (the wrapper's check_items_span_homogeneous derives it once
+# from the homogeneous spans) and `mins` the validated per-item base used to
+# zero-base each item. PerFit's printed progress is captured so only typed cli
+# conditions reach the user.
+kernel_gnormed <- function(responses, ncat, mins, call) {
   n <- nrow(responses)
   value <- rep(NA_real_, n)
   # The whole-number contract is checked first, so a fractional cell surfaces a
@@ -109,7 +112,6 @@ kernel_gnormed <- function(responses, categories, mins, call) {
   if (sum(complete) < 2L) {
     return(list(value = value, fit = NULL))
   }
-  ncat <- as.integer(categories[[1L]])
   z <- personfit_zero_base(responses[complete, , drop = FALSE], mins, ncat, call)
   utils::capture.output(
     fit <- PerFit::Gnormed.poly(matrix = z, Ncat = ncat)

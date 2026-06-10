@@ -190,13 +190,13 @@ test_that("the antonym branch selects on the NEGATIVE tail, not the positive one
 
 test_that("the wrapper is matrix-only: no item-metadata channel exists", {
   # Pins keying-insensitivity structurally: there is no items / scale /
-  # reverse_keyed / categories argument, so a reverse-keying-before-pairing
+  # reverse_keyed / max argument, so a reverse-keying-before-pairing
   # mutant cannot be wired in. Pairing uses the raw responses (reverse-keying
   # would collapse genuine antonym correlations toward zero).
   fmls <- names(formals(cier_psychant))
   expect_setequal(fmls, c("responses", "critical_r", "fpr", "cutoff"))
   expect_false(any(c("items", "scale", "reverse_keyed",
-                     "categories") %in% fmls))
+                     "max") %in% fmls))
 })
 
 test_that("scored antonym values are finite, within [-1, 1], and vary per respondent", {
