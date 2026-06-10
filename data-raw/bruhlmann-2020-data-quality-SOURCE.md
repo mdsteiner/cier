@@ -39,3 +39,21 @@ original `data_anon.csv`, we:
 
 No response value, validity-indicator value, or timing value was altered. The
 build is reproducible with `data-raw/bfi_careless.R`.
+
+## Keying note: `v_BFI_OP9_R`
+
+The authors' own analysis script (OSF component `Script/Analysis.R`, ~line 145)
+applies an extra correction to one openness item after the standard
+reverse-coding of all `_R` items:
+
+```r
+df2$v_BFI_OP9_R <- 8 - df2$v_BFI_OP9_R # wrong item
+```
+
+evidently correcting an item their survey had keyed differently than its name
+suggests. Replicating that line reproduces the paper's odd-even consistency
+results exactly (63 flagged, M = .61, SD = .43; without it, 89 / .51 / .50) —
+the "Reproducing published results" vignette documents and demonstrates this.
+Per the no-alteration rule above, the bundled object keeps the distributed
+values: name-based reverse-keying (`reverse_keyed = grepl("_R$", ...)`)
+follows the item names, not the authors' corrected analysis.

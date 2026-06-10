@@ -21,6 +21,17 @@
 #' careless indicators are retained from the original; no response,
 #' validity-indicator, or timing value was altered.
 #'
+#' One keying caveat: the authors' own analysis script (`Script/Analysis.R` on
+#' the OSF project) applies an extra transformation to a single openness item
+#' after the usual reverse-coding of the `_R` items
+#' (`v_BFI_OP9_R <- 8 - v_BFI_OP9_R`, with the comment "wrong item"), evidently
+#' correcting an item their survey had keyed differently than its name suggests.
+#' The bundled responses are distributed as-is, so name-based reverse-keying
+#' (`reverse_keyed = grepl("_R$", ...)`, as used throughout the package
+#' examples) follows the item names, not the authors' corrected analysis.
+#' `vignette("published-results", package = "cier")` demonstrates the
+#' difference on the paper's odd-even consistency counts.
+#'
 #' @source Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020).
 #'   Open data on the OSF project \url{https://osf.io/9vjur/}.
 #'

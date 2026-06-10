@@ -33,6 +33,17 @@ Bundled under the Creative Commons Attribution 4.0 International licence
 (CC BY 4.0); see the package \code{LICENSE.note}. Only the 44 BFI items and the two
 careless indicators are retained from the original; no response,
 validity-indicator, or timing value was altered.
+
+One keying caveat: the authors' own analysis script (\code{Script/Analysis.R} on
+the OSF project) applies an extra transformation to a single openness item
+after the usual reverse-coding of the \verb{_R} items
+(\code{v_BFI_OP9_R <- 8 - v_BFI_OP9_R}, with the comment "wrong item"), evidently
+correcting an item their survey had keyed differently than its name suggests.
+The bundled responses are distributed as-is, so name-based reverse-keying
+(\code{reverse_keyed = grepl("_R$", ...)}, as used throughout the package
+examples) follows the item names, not the authors' corrected analysis.
+\code{vignette("published-results", package = "cier")} demonstrates the
+difference on the paper's odd-even consistency counts.
 }
 \examples{
 # The 44 BFI items are the first 44 columns; the last two are the labels.

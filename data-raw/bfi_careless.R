@@ -19,6 +19,9 @@ stopifnot(length(bfi_items) == 44L,
 
 # BFI items first (source order; the `_R` suffix marks reverse-keyed items and
 # EX/AG/CON/NEU/OP marks the Big-Five scale), then the two careless labels.
+# The `_R` naming is kept as distributed even though the authors' analysis
+# corrected v_BFI_OP9_R as mis-keyed -- see the keying note in
+# data-raw/bruhlmann-2020-data-quality-SOURCE.md.
 bfi_careless <- raw[, c(bfi_items, "v_Bogus_Item", "v_IRI")]
 rownames(bfi_careless) <- NULL
 

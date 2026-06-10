@@ -49,7 +49,10 @@ inconsistent scores high. The consistency indices need some item metadata:
 which scale each item belongs to, whether it is reverse-keyed, and how many response
 options it has. Build that from the BFI column names: the scale is the letters after
 `v_BFI_`, a trailing `_R` marks a reverse-keyed item, and every item is a 5-point
-scale.
+scale. (One caveat: the dataset authors' own analysis treated one item, `v_BFI_OP9_R`, as
+keyed differently than its name suggests and corrected it; keying by the item names,
+as here, makes the consistency indices differ slightly from the paper's counts --
+`vignette("published-results")` documents the difference.)
 
 ```{r}
 resp <- bfi_careless[, 1:44]
