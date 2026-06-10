@@ -71,6 +71,15 @@ your session's random stream). Override the cutoff with \strong{one} of two mutu
 exclusive arguments: \code{fpr} (the nominal level) or \code{cutoff} (a literal threshold
 on the score).
 
+\strong{The sample must span the declared scale.} PerFit's item-step popularities
+are undefined when a scale end never occurs, so the complete-case block must
+\strong{attain both extremes}: the lowest and the highest of the declared
+\code{categories} must each be chosen at least once somewhere in the sample. A
+perfectly valid dataset in which, say, nobody ever picked the top category
+raises a typed error rather than scoring -- check \code{categories} / \code{min}
+against the data, or expect this on small samples with rarely-endorsed
+extreme categories.
+
 \strong{Abstention.} Because \code{\link[PerFit:Gnormed.poly]{PerFit::Gnormed.poly()}} needs complete data, a
 respondent with \strong{any} missing cell is excluded: both \code{value} and \code{flagged}
 are \code{NA} and the row is dropped from the flag count and rate. If fewer than two

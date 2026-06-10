@@ -146,6 +146,43 @@ so the screen test pins only that it is fed the collapsed votes plus the correct
 per-vote null nominal (chi-square / Monte-Carlo nominal for the null-referenced
 votes, `NA` for the percentile votes).
 
+## Published-results reproduction (the `published-results` vignette)
+
+The vignette reproduces per-index results from four published studies. The
+committed table `inst/extdata/published-results.csv` freezes two things at
+once: the **transcribed paper values** (the outer spec — each block verified
+against its primary source, cited below) and **cier's reproduced values**
+(written by the vignette knit). Two test layers hold them together: the fast
+tier pins the transcription (digest + verbatim spot checks) and the status /
+explanation contracts; the slow tier re-fetches the data and recomputes every
+cier cell with the same recorded seeds.
+
+| Quantity | Target tolerance | Reference |
+|---|---:|---|
+| `paper_value` transcription, Goldammer battery AUCs | exact (digest-frozen) | Goldammer et al. (2024), *BRM* 56(8) 8422-8449, suppl. Tables S5/S6 (Study 1), S14/S15 (Study 2), S42 (Studies 4/5) — the supplement DOCX ships inside the authors' polybox data archive |
+| `paper_value` transcription, Goldammer RPR paper | exact (digest-frozen) | Goldammer et al. (2024), *BRM* 56(8) 8831-8851, Table 9 (real-data example; AUC + SEN95) |
+| `paper_value` transcription, Schroeders et al. | exact (digest-frozen) | Schroeders, Schmidt & Gnambs (2022), *EPM* 82(1) 29-56, Table 3 (empirical study; means over 1,000 test draws) |
+| `paper_value` transcription, Bruhlmann et al. | exact (digest-frozen) | Bruhlmann et al. (2020), *Methods in Psychology* 2:100022, Table 2 + Section 4 prose (flagged counts at the authors' cutoffs) |
+| slow-test recompute vs the committed `cier_value` | 5e-4 | same code conventions and seeds; values stored at 3 dp |
+| `matches` status | 2-dp agreement (`round(cier, 2) == round(paper, 2)`); flagged counts: exact equality | binding wording rule (never call a cell reproduced beyond this) |
+| `close` status | not 2-dp-equal and `abs(delta) <= 0.03`; counts: within +-2 respondents | binding wording rule |
+| `differs` status | beyond the band; a written explanation in `note` is mandatory and the cell must appear in the fast test's allowed-differs list | pre-registered divergences |
+| allowed-differs caps (each explained mechanism's plausible size; a flip or wrong-group construction cannot hide inside them) | battery MD 0.30; battery Ht (two-wave Studies 4/5, both designs) 0.15; battery whole-sample Synonyms on Studies 4/5 0.30; careful-reference companions 0.10; RPR-paper SEN95 0.15; Bruhlmann odd-even / resampled-reliability / person-total counts +-30 (the consistency counts inherit the authors' correction of one mis-keyed openness item; replicating it reproduces their counts exactly, demonstrated in the vignette) | feasibility runs, 2026-06; binding like every band here |
+
+Why the bands are honest rather than tight: the papers' published estimates
+embed steps cier deliberately does not reproduce — the battery tables pool over
+100 multiple imputations where an index was incomputable for a few respondents
+(cier abstains instead), the RPR paper computes AUC/SEN95 with tie-corrected
+nonparametric ROC *regression* (cier's check uses the plain empirical rank
+AUC / empirical 95%-specificity cutoff), Schroeders et al. report means over
+1,000 random test draws whose RNG stream is not recoverable (the procedure is
+replicated with a recorded seed; the Monte-Carlo error of such a mean is
+~0.002-0.004), and resampled indices (RPR / resampled individual reliability)
+carry their own resampling noise. The slow-tier recompute is a **white-box**
+check by design: it shares the computation conventions with the vignette, so
+its job is pinning CSV-code agreement (anti-drift), while faithfulness to the
+papers is pinned by the frozen transcription plus the allowed-differs list.
+
 ## How to use this table
 
 - Tests in `tests/testthat/test-cutoff.R` / `test-diagnostics.R` assert these

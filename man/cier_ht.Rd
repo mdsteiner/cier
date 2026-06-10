@@ -18,7 +18,8 @@ needs an integer \code{categories} value (the number of response options, \verb{
 and an optional integer \code{min} (the scale base; default \code{1}, declare it for a
 0-based or bipolar scale) so it can be reverse-scored. Forward-keyed items
 need no metadata, and \code{categories} may be heterogeneous across items
-(\code{mokken} does not require a common number of response categories).}
+(\code{mokken} does not require a common number of response categories, but it
+caps every item at 10 categories -- see Details).}
 
 \item{fpr}{Optional target false-positive tail mass for the percentile cutoff.
 \code{NULL} (default) uses the registry default \code{0.05}. A finite number in the open
@@ -55,7 +56,11 @@ with the self-inverse reflection \code{(min + max) - x} (where
 Supply the raw responses and declare reverse items through \code{items}. Only
 reverse-keyed items need a \code{categories} value (used to reverse-score them);
 \code{mokken} itself accepts a mix of category counts, so no common number of
-response categories is required.
+response categories is required. \code{mokken} does, however, impose a \strong{ceiling
+of 10 response categories}: a scale whose responses span more than 10
+distinct points (an 11-point or 0--100 item, for example) cannot be scored,
+and the index raises a typed error naming the limit. Recode or drop the wide
+items, or use another index.
 
 \strong{Cutoff -- an empirical percentile (a ranking convention).} Ht's default
 cutoff is the \code{fpr} quantile of the observed scores (the 5th percentile by

@@ -17,7 +17,8 @@ of \code{responses} (\code{scale}, \code{reverse_keyed}, \code{categories}, opti
 metadata indices with a recorded reason.}
 
 \item{methods}{Optional character vector of method ids to run.
-\code{NULL} (default) runs every screenable index. An unknown id is a typed error.}
+\code{NULL} (default) runs every screenable index. An unknown id is a typed
+error; see \code{\link[=cier_methods]{cier_methods()}} for the available set.}
 
 \item{control}{Optional named list of per-index argument overrides, keyed by
 method id; each entry is a list of arguments forwarded to that index (for
@@ -49,7 +50,11 @@ indices that need item metadata (\code{\link[=cier_even_odd]{cier_even_odd()}}, 
 \code{\link[=cier_gnormed]{cier_gnormed()}}, \code{\link[=cier_ht]{cier_ht()}}) are \strong{skipped with a recorded reason} when
 \code{items} is \code{NULL}; the two backed by a \code{Suggests} package (\code{\link[=cier_gnormed]{cier_gnormed()}} via
 \code{PerFit}, \code{\link[=cier_ht]{cier_ht()}} via \code{mokken}) are skipped when that package is not
-installed. The skipped indices and their reasons are in \verb{$skipped}. A genuinely
+installed. An index that hits a typed \strong{backend limit} on otherwise-valid
+data (for example \code{mokken}'s 10-category ceiling for \code{\link[=cier_ht]{cier_ht()}}) is likewise
+recorded as skipped with the limit as the reason, so one index's ceiling
+never aborts the battery. The skipped indices and their reasons are in
+\verb{$skipped}. A genuinely
 malformed \code{items} frame is \strong{not} skipped -- the index's own typed error is
 left to surface so you can fix the metadata.
 
@@ -78,7 +83,11 @@ flags its target rate by construction, a per-index flag rate is tautological.
 reports, for each level k, the
 observed share of respondents flagged by at least k votes against the share
 expected if the votes fired independently; observed far above expected makes a
-clustered careless subgroup visible. The Mahalanobis chi-square and Gnormed
+clustered careless subgroup visible. In the printed table the \verb{<- excess}
+marker appears only where the observed count would be unlikely under vote
+independence (a one-sided binomial tail below 0.05) -- a descriptive guard so
+ordinary sampling noise is not advertised as contamination, not a formal
+test. The Mahalanobis chi-square and Gnormed
 Monte-Carlo votes carry their calibrated null nominal (the rest are
 percentile, hence \code{NA}).
 
@@ -96,15 +105,17 @@ walks through this.
 # The 44 BFI items are the first 44 columns of the bundled example data; a
 # trailing "_R" in the column name marks a reverse-keyed item, and the scale
 # is the BFI domain (the letters between the "v_BFI_" prefix and the item
-# number, e.g. EX, AG, CON, NEU, OP).
+# number, e.g. EX, AG, CON, NEU, OP). Seed BOTH randomised pieces (RPR's
+# resampling, Gnormed's Monte-Carlo null) for a reproducible screen.
 nm <- names(bfi_careless)[1:44]
 items <- data.frame(
-  scale = gsub("^v_BFI_|[0-9_R]+$", "", nm),
+  scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\\\1", nm),
   reverse_keyed = grepl("_R$", nm),
   categories = 5L
 )
 screen <- cier_screen(bfi_careless[, 1:44], items,
-                      control = list(cier_personal_reliability = list(seed = 1)))
+                      control = list(cier_personal_reliability = list(seed = 1),
+                                     cier_gnormed = list(seed = 1)))
 screen
 head(as.data.frame(screen))
 }
@@ -123,5 +134,8 @@ data. \emph{Psychological Methods}, 17(3), 437-455. \doi{10.1037/a0028085}
 \seealso{
 The index functions \code{\link[=cier_longstring]{cier_longstring()}}, \code{\link[=cier_irv]{cier_irv()}},
 \code{\link[=cier_personal_reliability]{cier_personal_reliability()}}, \code{\link[=cier_gnormed]{cier_gnormed()}}, \code{\link[=cier_ht]{cier_ht()}}
+
+Other orchestration:
+\code{\link[=cier_methods]{cier_methods()}}
 }
 \concept{orchestration}
