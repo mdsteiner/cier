@@ -7,6 +7,7 @@
 ^\.github$
 ^codecov\.yml$
 ^README\.Rmd$
+^vignettes/.*\.Rmd\.orig$
 ^LICENSE\.md$
 ^ADR\.md$
 ^\.Rproj\.user$

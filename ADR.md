@@ -449,3 +449,50 @@ slow enough to tag (the `PerFit` / `mokken` cross-package parity already gates o
 `skip_if_not_installed()` and runs sub-second), so the helper ships as the
 documented convention with no test tagged; tag the first genuinely slow path
 (e.g. a large-n recovery sweep) when it lands.
+
+## Published-results reproduction vignette
+
+The `published-results` vignette reproduces, index by index, the results of
+four published studies (Bruhlmann et al. 2020; the two Goldammer et al. 2024
+papers; Schroeders et al. 2022). Its binding choices:
+
+- **Precomputed.** The shipped `vignettes/published-results.Rmd` is generated
+  by the maintainers from `vignettes/published-results.Rmd.orig` (committed,
+  `.Rbuildignore`d, knitted via `data-raw/knit-published-results.R` in a fresh
+  `callr` session). Building the package evaluates nothing: no network, no
+  `PerFit`/`mokken`/`mice` at build time. The code readers see in the vignette
+  is the code that produced its output.
+- **External data stays fetch-only.** The Goldammer polybox archives and the
+  Schroeders OSF files carry no redistribution licence; they are downloaded
+  into `tools::R_user_dir("cier", "cache")` at knit time and never bundled.
+  The slow-tier tests pin each artifact's md5 and skip with a reason when an
+  upstream file changes; the Bruhlmann cells need only the bundled
+  `bfi_careless`.
+- **The committed table is a frozen contract.** The knit writes
+  `inst/extdata/published-results.csv`; the fast tier freezes the transcribed
+  paper values (digest plus verbatim spot checks against the cited source
+  tables) and recomputes every verdict from the stored values; the slow tier
+  re-fetches and recomputes every cier cell at 5e-4 under the recorded seeds.
+  Wording is honest by construction: a cell is called "matches" only at the
+  paper's two-decimal precision (flagged counts: exactly), "close" within
+  0.03 (counts: within 2), and anything beyond is "differs" with a mandatory
+  written explanation and membership in a capped allowed list (see
+  `tests/reference/TOLERANCES.md`, "Published-results reproduction").
+- **Pre-registered divergences** (each capped and explained in place): the
+  battery paper's Mahalanobis distance (whole-sample centroid vs the authors'
+  careful-respondent reference), Ht on the within-subject contrasts,
+  whole-sample synonym pairing on the two-wave studies, the careful-reference
+  pairing companions, the RPR paper's SEN95 (their tie-corrected ROC
+  regression vs the plain empirical cutoff), and the Bruhlmann resampled
+  reliability / person-total conventions.
+- **Two construction facts the reproduction settled** (now load-bearing in
+  the vignette and its tests): the battery paper's resampled personal
+  reliability splits within the 15 BFI-2 facets, not the 5 domains; and the
+  RPR paper's "conventional PR" is the even-odd consistency, i.e. it maps to
+  `cier_even_odd()`, where cier's value correlates -1.0 with the authors'
+  stored column.
+- **Multiple imputation was evaluated and not adopted.** Imputing abstained
+  index values with `mice` moves the affected battery cells by at most a few
+  thousandths and pulls the pairing cells away from the paper; the vignette
+  documents the check, and cier's abstain-rather-than-impute behaviour
+  stands. `mice` is needed only to re-knit, so it stays out of `DESCRIPTION`.
