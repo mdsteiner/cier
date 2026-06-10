@@ -248,6 +248,19 @@ test_that("critical_r too high finds no pairs: every row abstains and flags nobo
   expect_true(all(is.na(out$flagged)))
 })
 
+test_that("the no-pairs warning is the tailored antonym one, raised once", {
+  # Mirrors the psychsyn assertion: the antonym wrapper shares the no-pairs
+  # tail, so the single warning carries the cier_warning_no_pairs subclass and
+  # the antonym noun (not "synonym").
+  w <- testthat::capture_warnings(cier_psychant(ant_matrix(n = 30L),
+                                                critical_r = 0.99))
+  expect_length(w, 1L)
+  expect_match(w, "No antonym pairs clear")
+  cond <- tryCatch(cier_psychant(ant_matrix(n = 30L), critical_r = 0.99),
+                   warning = function(w) w)
+  expect_s3_class(cond, "cier_warning_no_pairs")
+})
+
 test_that("a respondent with fewer than three complete pairs abstains; rows stay aligned", {
   x <- ant_matrix(n = 12L, seed = 3L)
   x[5L, c(2L, 3L, 4L, 6L, 7L, 8L)] <- NA   # leaves only pair (5,1) complete -> abstains

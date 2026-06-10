@@ -13,17 +13,26 @@
 # ---- Longstring -------------------------------------------------------------
 
 # Maximum run length of consecutive identical responses per respondent, over
-# the *raw* row (no scale blocking). Bytewise compatible with
-# careless::longstring(): base::rle() treats each NA as its own run (NA == NA
-# is NA, not TRUE), so identical values separated by NA do not merge and an
-# all-NA row yields a max run length of 1. The wrapper applies NA-abstention for
-# rows with no present responses; the kernel itself stays pure.
+# the *raw* row (no scale blocking). One columnwise pass over the whole matrix
+# (p - 1 vectorised column transitions updating an n-length current-run and
+# running-max) instead of n separate R-level rle() calls; integer run counting
+# is exact, so the result is bytewise compatible with careless::longstring().
+# Its rle() NA semantics are reproduced by the `eq[is.na(eq)] <- FALSE` reset:
+# base::rle() treats each NA as its own run (NA == NA is NA, not TRUE), so
+# identical values separated by NA do not merge and an all-NA row yields a max
+# run length of 1. The wrapper applies NA-abstention for rows with no present
+# responses; the kernel itself stays pure.
 kernel_longstring <- function(responses) {
-  vapply(
-    seq_len(nrow(responses)),
-    function(i) max(rle(responses[i, ])$lengths),
-    numeric(1L)
-  )
+  n <- nrow(responses)
+  current <- rep(1, n)
+  best <- rep(1, n)
+  for (j in seq_len(ncol(responses))[-1L]) {
+    eq <- responses[, j] == responses[, j - 1L]
+    eq[is.na(eq)] <- FALSE                 # an NA cell starts a new run
+    current <- current * eq + 1            # extend the run, or reset to 1
+    best <- pmax(best, current)
+  }
+  best
 }
 
 # ---- IRV (intra-individual response variability) ----------------------------
@@ -65,7 +74,28 @@ kernel_irv <- function(responses) {
 #                              answered by nobody): solve() does NOT error on an
 #                              NA matrix, it returns an all-NA inverse, so an
 #                              `anyNA()` check is required on top of tryCatch.
-# On the two non-"ok" statuses every value is NA; the wrapper raises the typed
+#   "indefinite_covariance"  - the pairwise covariance is invertible but NOT
+#                              positive definite. Pairwise estimation assembles
+#                              each cov cell from a different subsample, so under
+#                              heavy or structured missingness the cells can be
+#                              mutually inconsistent and Sigma gains a negative
+#                              eigenvalue while solve() still succeeds. The
+#                              bilinear form is then SIGNED -- a row can score a
+#                              negative "squared distance" the upper-tail
+#                              chi-square flag can never reach, and the ranking
+#                              among the positive rows is distorted too -- so the
+#                              distance is invalid for EVERY row and the kernel
+#                              abstains wholesale. chol() is the test (it errors
+#                              iff Sigma is not positive definite); the inverse
+#                              still comes from solve(), keeping every
+#                              positive-definite input byte-identical to
+#                              careless::mahad / psych::outlier. Repairing Sigma
+#                              instead (e.g. Matrix::nearPD) was deliberately
+#                              rejected: the smoothed statistic traces to no
+#                              cited paper or trusted package and would silently
+#                              mask the data problem (see ADR.md, "Mahalanobis
+#                              degenerate covariance: warn and abstain").
+# On the non-"ok" statuses every value is NA; the wrapper raises the typed
 # warning. The kernel stays pure (it raises no conditions).
 kernel_mahalanobis <- function(responses) {
   value <- rep(NA_real_, nrow(responses))
@@ -74,10 +104,13 @@ kernel_mahalanobis <- function(responses) {
     return(list(value = value, status = "insufficient_responses"))
   }
   x_f <- responses[keep, , drop = FALSE]
-  sx_inv <- tryCatch(solve(stats::cov(x_f, use = "pairwise")),
-                     error = function(e) NULL)
+  sx <- stats::cov(x_f, use = "pairwise")
+  sx_inv <- tryCatch(solve(sx), error = function(e) NULL)
   if (is.null(sx_inv) || anyNA(sx_inv)) {
     return(list(value = value, status = "singular_covariance"))
+  }
+  if (is.null(tryCatch(chol(sx), error = function(e) NULL))) {
+    return(list(value = value, status = "indefinite_covariance"))
   }
   x_centered <- scale(x_f, scale = FALSE)
   x_centered[is.na(x_centered)] <- 0
@@ -109,6 +142,19 @@ kernel_mahalanobis <- function(responses) {
 # item-mean profile). The wrapper needs no per-row warning -- the only condition
 # is the shared percentile-cutoff abstention when every respondent is NA -- so
 # the kernel returns the score vector alone, not a list. It stays pure.
+#
+# Zero-variance robustness: for a constant (straightliner) row the deviation
+# sum-of-squares sxx - sx^2/k is 0 in exact arithmetic, but on a NON-integer
+# constant floating cancellation lands it a few ulp on EITHER side of zero --
+# tiny-negative would send sqrt() to NaN with a leaked base-R warning, and
+# tiny-positive would leak a spurious finite ~1e-7 score into the percentile
+# pool. So (a) the variance terms are clamped at 0 under the sqrt (the
+# kernel_psychsyn technique, silencing the warning) and (b) a constant row is
+# detected EXACTLY (masked min == max) and forced to NA, independent of which
+# way the cancellation fell. The item-mean side needs no exact detection: a flat
+# masked mean profile is exactly equal floats, cancelling to exactly 0 -> den
+# 0 -> non-finite -> NA. suppressWarnings() guards the all-NA-row reduction
+# (those rows abstain via k < 3 regardless).
 kernel_person_total <- function(responses) {
   present <- !is.na(responses)
   k <- rowSums(present)
@@ -123,9 +169,13 @@ kernel_person_total <- function(responses) {
   sm  <- as.numeric(present %*% m)
   smm <- as.numeric(present %*% (m * m))
   num <- sxm - sx * sm / k
-  den <- sqrt((sxx - sx * sx / k) * (smm - sm * sm / k))
+  den <- sqrt(pmax(sxx - sx * sx / k, 0) * pmax(smm - sm * sm / k, 0))
   value <- num / den
-  value[k < 3L | !is.finite(value)] <- NA_real_
+  constant <- suppressWarnings(
+    matrixStats::rowMins(responses, na.rm = TRUE) ==
+      matrixStats::rowMaxs(responses, na.rm = TRUE)
+  )
+  value[k < 3L | constant | !is.finite(value)] <- NA_real_
   as.numeric(value)
 }
 
@@ -172,7 +222,9 @@ spearman_brown_clamp <- function(r) {
 # range. In the wrapper path `items` has been validated by check_items()
 # (categories present and non-NA, min finite/whole on every reverse item, min
 # defaulted to 1); the categories and min guards below are defensive backstops for
-# direct callers, keeping the single-kernel reuse path safe.
+# direct callers, keeping the single-kernel reuse path safe. The observed-range
+# cross-check below is NOT a backstop: type-valid metadata can still contradict
+# the data, which only the data can reveal.
 apply_split_half_keying <- function(responses, items, call = rlang::caller_env()) {
   rk <- items$reverse_keyed
   if (!any(rk)) {
@@ -202,6 +254,30 @@ apply_split_half_keying <- function(responses, items, call = rlang::caller_env()
   }
   rev_cols <- responses[, rk, drop = FALSE]
   rev_max  <- mins[rk] + cats[rk] - 1L    # scale maximum per reverse item
+  # Cross-check the DECLARED range against the OBSERVED responses before
+  # reflecting: a type-valid but wrong declaration (the classic case: 0-based
+  # data declared categories = 5 with the default min = 1) would otherwise
+  # reflect to off-scale values and silently corrupt the consistency score.
+  # The person-fit bridges catch the same mistake in personfit_zero_base(); this
+  # gives the split-half family (and Ht's reverse items) the equivalent guard.
+  # An all-NA reverse column reduces to Inf/-Inf, which fails neither comparison
+  # and so is (correctly) not an offender.
+  obs_min <- suppressWarnings(matrixStats::colMins(rev_cols, na.rm = TRUE))
+  obs_max <- suppressWarnings(matrixStats::colMaxs(rev_cols, na.rm = TRUE))
+  bad <- obs_min < mins[rk] | obs_max > rev_max
+  if (any(bad)) {
+    offending <- which(rk)[bad]
+    cier_abort(
+      "cier_error_input",
+      c("Reverse-keyed item responses must lie within the declared scale range \\
+         {.val [min, min + categories - 1]}.",
+        "x" = "Out-of-range reverse-keyed item(s): {.val {offending}}.",
+        "i" = "Check {.field categories} / {.field min} against the data (a \\
+               0-based scale needs {.field min} = 0); reflecting an off-range \\
+               value would silently corrupt the score."),
+      data = list(arg = "items", observed = offending), call = call
+    )
+  }
   reflect  <- mins[rk] + rev_max          # (min + max) self-inverse reflection
   responses[, rk] <- rep(reflect, each = nrow(responses)) - rev_cols
   responses
@@ -387,10 +463,15 @@ pairing_cor <- function(responses) {
 # and orientation byte-identical to careless:::get_item_pairs(), preserving the
 # bytewise careless::psychsyn() parity. Shared by psychsyn (pairing = "syn") and
 # the antonyms index (pairing = "ant"); the `pairing` tail is distinct from the
-# registry flag direction.
-find_item_pairs <- function(responses, critical_r, pairing) {
+# registry flag direction. `cor_mat` optionally injects a precomputed
+# pairing_cor(responses) so a caller evaluating several thresholds (the
+# critical_r sweep) builds the p x p matrix once; NULL (the default) computes it
+# here, byte-identically.
+find_item_pairs <- function(responses, critical_r, pairing, cor_mat = NULL) {
   critical_r <- abs(critical_r)
-  cor_mat <- pairing_cor(responses)
+  if (is.null(cor_mat)) {
+    cor_mat <- pairing_cor(responses)
+  }
   p <- ncol(cor_mat)
   diag(cor_mat) <- NA_real_
   cor_mat[upper.tri(cor_mat, diag = FALSE)] <- NA_real_
@@ -420,16 +501,23 @@ find_item_pairs <- function(responses, critical_r, pairing) {
 # (correlation undefined); a respondent who answered nothing has no complete pairs
 # and so abstains. The two variance terms are clamped at 0 so floating noise on a
 # zero-variance side cannot send sqrt() to NaN with a warning -- such rows fall to
-# NA through the finite check. `pairing` is the pair-discovery tail ("syn" /
-# "ant"); pairing and scoring both use the raw responses, with no reverse-keying.
+# NA through the finite check. The clamp alone covers only the tiny-NEGATIVE side
+# of the cancellation: on a NON-integer constant the deviation sum-of-squares can
+# also land tiny-POSITIVE, leaking a spurious finite score (~1.0) instead of the
+# documented abstention -- so a constant pair side is additionally detected
+# EXACTLY (masked min == max over the complete-pair values, NA-aligned before the
+# zero-fill) and forced to NA. suppressWarnings() guards the no-complete-pair
+# all-NA reduction (those rows abstain via k <= 2 regardless). `pairing` is the
+# pair-discovery tail ("syn" / "ant"); pairing and scoring both use the raw
+# responses, with no reverse-keying.
 #
 # Parity note: this masked-sum form is the same Pearson correlation as the per-row
 # cor() loop it replaces, but sums in a different order, so it matches
 # careless::psychsyn(resample_na = FALSE) to 1e-12 rather than bytewise (the loop
 # was exact). The independent oracle parity (1e-12) is unaffected. See
 # tests/reference/TOLERANCES.md and the ADR entry.
-kernel_psychsyn <- function(responses, critical_r, pairing) {
-  pairs <- find_item_pairs(responses, critical_r, pairing)
+kernel_psychsyn <- function(responses, critical_r, pairing, cor_mat = NULL) {
+  pairs <- find_item_pairs(responses, critical_r, pairing, cor_mat = cor_mat)
   n <- nrow(responses)
   if (nrow(pairs) == 0L) {
     return(rep(NA_real_, n))
@@ -437,6 +525,14 @@ kernel_psychsyn <- function(responses, critical_r, pairing) {
   a_cols <- responses[, pairs[, 1L], drop = FALSE]
   b_cols <- responses[, pairs[, 2L], drop = FALSE]
   mask <- !is.na(a_cols) & !is.na(b_cols)
+  a_cols[!mask] <- NA_real_                # align both sides to complete pairs
+  b_cols[!mask] <- NA_real_
+  constant <- suppressWarnings(
+    matrixStats::rowMins(a_cols, na.rm = TRUE) ==
+      matrixStats::rowMaxs(a_cols, na.rm = TRUE) |
+      matrixStats::rowMins(b_cols, na.rm = TRUE) ==
+        matrixStats::rowMaxs(b_cols, na.rm = TRUE)
+  )
   a_cols[!mask] <- 0
   b_cols[!mask] <- 0
   k   <- rowSums(mask)
@@ -448,6 +544,6 @@ kernel_psychsyn <- function(responses, critical_r, pairing) {
   num <- sab - sa * sb / k
   den <- sqrt(pmax(saa - sa * sa / k, 0) * pmax(sbb - sb * sb / k, 0))
   value <- num / den
-  value[k <= 2L | !is.finite(value)] <- NA_real_
+  value[k <= 2L | constant | !is.finite(value)] <- NA_real_
   as.numeric(value)
 }

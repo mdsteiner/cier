@@ -88,6 +88,47 @@ inform_no_pairs <- function(strictest, strongest, antonym) {
   )
 }
 
+# Typed warning when an INDEX call (cier_psychsyn / cier_psychant) discovers no
+# qualifying pairs: the shared percentile abstention ("no finite values remain")
+# names neither the cause (critical_r is too strict for this inventory) nor the
+# remedy. Carries cier_warning_insufficient_items alongside its own subclass so
+# cier_screen()'s targeted muffler still silences it (the screen reports the
+# case transparently as "0 / 0"); a direct call sees the actionable message.
+warn_no_pairs <- function(pairing, critical_r, cor_mat,
+                          call = rlang::caller_env()) {
+  antonym <- identical(pairing, "ant")
+  noun <- if (antonym) "antonym" else "synonym"
+  strongest <- strongest_pairing_cor(cor_mat, antonym)
+  strongest_disp <- round(strongest, 3)
+  cier_warn(
+    c("cier_warning_no_pairs", "cier_warning_insufficient_items"),
+    c("No {noun} pairs clear {.arg critical_r} = {critical_r}; every \\
+       respondent abstains.",
+      "i" = "Strongest in-tail inter-item r = {strongest_disp}. Lower \\
+             {.arg critical_r}, or sweep candidate thresholds with \\
+             {.fun cier_psychsyn_critval}."),
+    data = list(critical_r = critical_r, strongest_r = strongest, n_used = 0L),
+    call = call
+  )
+}
+
+# Shared cutoff tail for the two pair-based indices (cier_psychsyn /
+# cier_psychant). With qualifying pairs it is the ordinary percentile tail; with
+# none it swaps the generic percentile abstention for the actionable no-pairs
+# warning above (raised once; the generic warning the all-NA value vector then
+# triggers inside resolve_index_cutoff is muffled as redundant).
+resolve_pair_index_cutoff <- function(value, row, fpr, cutoff, no_pairs,
+                                      pairing, critical_r, cor_mat, call) {
+  if (!no_pairs) {
+    return(resolve_index_cutoff(value, row, fpr, cutoff, call = call))
+  }
+  warn_no_pairs(pairing, critical_r, cor_mat, call = call)
+  withCallingHandlers(
+    resolve_index_cutoff(value, row, fpr, cutoff, call = call),
+    cier_warning_insufficient_items = function(w) invokeRestart("muffleWarning")
+  )
+}
+
 #' List the synonym (or antonym) item pairs and their inter-item correlations
 #'
 #' Surfaces the whole-sample inter-item correlations that [cier_psychsyn()] (and
@@ -199,12 +240,21 @@ cier_psychsyn_critval <- function(responses,
   check_critical_r_grid(critical_r, call = call)
   pairing <- if (antonym) "ant" else "syn"
   n <- nrow(responses)
-  strongest <- strongest_pairing_cor(pairing_cor(responses), antonym)
+  # One p x p pairing correlation serves the whole sweep: the matrix depends
+  # only on the data, the grid only moves the threshold filter over it.
+  cor_mat <- pairing_cor(responses)
+  strongest <- strongest_pairing_cor(cor_mat, antonym)
   n_pairs <- vapply(critical_r,
-                    function(cr) nrow(find_item_pairs(responses, cr, pairing)),
+                    function(cr) {
+                      nrow(find_item_pairs(responses, cr, pairing,
+                                           cor_mat = cor_mat))
+                    },
                     integer(1L))
   n_scored <- vapply(critical_r,
-                     function(cr) sum(!is.na(kernel_psychsyn(responses, cr, pairing))),
+                     function(cr) {
+                       sum(!is.na(kernel_psychsyn(responses, cr, pairing,
+                                                  cor_mat = cor_mat)))
+                     },
                      integer(1L))
   out <- data.frame(
     critical_r = critical_r,

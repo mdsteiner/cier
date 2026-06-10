@@ -357,6 +357,45 @@ test_that("Ht accepts forward-only items without (or with heterogeneous) categor
                           cutoff = 0), "cier_index")
 })
 
+test_that("a scale wider than mokken's 10-category ceiling is a typed backend-limit error", {
+  # mokken::coefH's check.data hard-stops with a raw simpleError when the global
+  # zero-based range exceeds 9 ("mokken cannot ... handle [more than] 10
+  # categories"). The kernel converts that backend ceiling into a typed
+  # cier_error_input BEFORE coefH runs, with the cier_error_backend_limit
+  # subclass cier_screen() catches to skip-with-reason. An 11-point scale
+  # (spanning 1..11) trips it; so does a heterogeneous battery where a single
+  # item spans more than 10 points (the ceiling is the GLOBAL range, not a
+  # per-item property).
+  skip_if_not_installed("mokken")
+  m11 <- poly_matrix(n = 30L, p = 4L, ncat = 11L)
+  m11[1L, 1L] <- 1   # force both extremes so the global range is exactly 0..10
+  m11[2L, 1L] <- 11
+  items11 <- data.frame(reverse_keyed = rep(FALSE, 4L))
+  expect_error(cier_ht(m11, items11), class = "cier_error_backend_limit")
+  expect_error(cier_ht(m11, items11), class = "cier_error_input")
+  # Heterogeneous battery: 5-point items plus one wide item spanning 1..11.
+  m_mix <- poly_matrix(n = 30L, p = 5L, ncat = 5L)
+  wide <- poly_matrix(n = 30L, p = 1L, ncat = 11L, seed = 9L)
+  wide[1L, 1L] <- 1
+  wide[2L, 1L] <- 11
+  m_mix <- cbind(m_mix, wide)
+  expect_error(cier_ht(m_mix, data.frame(reverse_keyed = rep(FALSE, 6L))),
+               class = "cier_error_backend_limit")
+})
+
+test_that("a 10-point scale (the ceiling boundary) still scores", {
+  # 1..10 zero-bases to 0..9, exactly at mokken's limit: the guard must use a
+  # strict > 9 comparison, not >= 9 (an off-by-one mutant would reject valid
+  # 10-point data).
+  skip_if_not_installed("mokken")
+  m10 <- poly_matrix(n = 30L, p = 6L, ncat = 10L)
+  m10[1L, 1L] <- 1
+  m10[2L, 1L] <- 10
+  out <- cier_ht(m10, data.frame(reverse_keyed = rep(FALSE, 6L)))
+  expect_s3_class(out, "cier_index")
+  expect_true(any(is.finite(out$value)))
+})
+
 test_that("a wrong number of item rows is a typed input error", {
   m <- poly_matrix(n = 10L, p = 6L)
   expect_error(cier_ht(m, data.frame(categories = rep(5, 3L))),

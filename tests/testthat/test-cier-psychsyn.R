@@ -145,6 +145,18 @@ test_that("find_item_pairs selects exactly the synonym pairs (no cross, no dupes
   expect_identical(nrow(find_item_pairs(hand_fixture(), 0.60, "ant")), 0L)
 })
 
+test_that("an injected cor_mat reproduces the default path byte-identically", {
+  # The cor_mat parameter exists so a multi-threshold caller (the critical_r
+  # sweep, the wrappers' shared discovery + scoring) builds the p x p pairing
+  # correlation once; injecting pairing_cor(x) must change nothing.
+  x <- syn_matrix(n = 30L, seed = 4L)
+  cm <- pairing_cor(x)
+  expect_identical(find_item_pairs(x, 0.60, "syn", cor_mat = cm),
+                   find_item_pairs(x, 0.60, "syn"))
+  expect_identical(kernel_psychsyn(x, 0.60, "syn", cor_mat = cm),
+                   kernel_psychsyn(x, 0.60, "syn"))
+})
+
 test_that("the synonym / antonym branch selects on the correct sign of r", {
   # Items 1 and 2 are perfectly NEGATIVELY correlated (r = -1); the rest are
   # orthogonal. The antonym branch must select (2, 1); the synonym branch must
@@ -196,6 +208,25 @@ test_that("a straightliner (zero-variance pair side) abstains, not a resampled v
   expect_false(is.na(out$value[[1L]]))
 })
 
+test_that("a NON-INTEGER straightliner abstains exactly, with no leaked warning or score", {
+  # An integer constant cancels the pair-side deviation sum-of-squares to exactly
+  # 0, but a decimal constant lands it a few ulp on EITHER side of zero. The
+  # pmax(, 0) clamp only catches the tiny-NEGATIVE side (den 0 -> NaN -> NA);
+  # tiny-POSITIVE used to leak a spurious finite score of ~1.0 -- a perfect
+  # consistency score for a straightliner -- that wrongly entered the percentile
+  # pool and the flag count. The kernel now detects a constant pair side exactly
+  # (masked min == max), so every constant abstains regardless of which way the
+  # cancellation fell.
+  for (const in c(2.597092, 1.663422, 0.3, 0.05)) {
+    x <- syn_matrix(n = 20L, seed = 5L)
+    x[2L, ] <- const                 # constant DECIMAL straightliner
+    expect_no_warning(out <- cier_psychsyn(x))
+    expect_true(is.na(out$value[[2L]]))
+    expect_true(is.na(out$flagged[[2L]]))
+    expect_false(is.na(out$value[[1L]]))
+  }
+})
+
 # ---- Direction (lower) ------------------------------------------------------
 
 test_that("direction is lower: a low-consistency row flags, a consistent one does not", {
@@ -220,6 +251,34 @@ test_that("critical_r too high finds no pairs: every row abstains and flags nobo
   expect_true(all(is.na(out$value)))
   expect_true(is.na(out$cutoff))
   expect_true(all(is.na(out$flagged)))
+})
+
+test_that("the no-pairs warning is the tailored one: cause, remedy, and ONE warning only", {
+  # The generic percentile abstention ("no finite values remain") names neither
+  # the cause nor the fix. The no-pairs path replaces it with a
+  # cier_warning_no_pairs that names critical_r, the strongest in-tail r, and
+  # the cier_psychsyn_critval() sweep -- and muffles the redundant generic
+  # warning so exactly one warning reaches the user. The subclass still carries
+  # cier_warning_insufficient_items so cier_screen()'s targeted muffler covers
+  # it (asserted above and in the screen suite).
+  w <- testthat::capture_warnings(out <- cier_psychsyn(syn_matrix(n = 30L),
+                                                       critical_r = 0.99))
+  expect_length(w, 1L)
+  expect_match(w, "No synonym pairs clear")
+  expect_match(w, "cier_psychsyn_critval")
+  cond <- tryCatch(cier_psychsyn(syn_matrix(n = 30L), critical_r = 0.99),
+                   warning = function(w) w)
+  expect_s3_class(cond, "cier_warning_no_pairs")
+  expect_identical(cier_condition_data(cond)$critical_r, 0.99)
+  # A respondent-level abstention with pairs PRESENT keeps the generic warning
+  # (the tailored message would mis-state the cause there): only cluster 1's
+  # first two items survive, so ONE pair qualifies but every respondent has a
+  # single complete pair (k = 1 <= 2) and abstains.
+  x <- syn_matrix(n = 30L, seed = 3L)
+  x[, 3L:9L] <- NA_real_
+  cond_na <- tryCatch(cier_psychsyn(x), warning = function(w) w)
+  expect_false(inherits(cond_na, "cier_warning_no_pairs"))
+  expect_s3_class(cond_na, "cier_warning_insufficient_items")
 })
 
 test_that("a respondent with fewer than three complete pairs abstains; rows stay aligned", {

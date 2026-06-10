@@ -146,12 +146,43 @@ load_method_registry <- function() {
   reg
 }
 
-# Purpose: Friendly internal accessor for the method-properties registry
-#          (the single, citable source of each index's default cutoff, flag
-#          direction, backend, and source paper). Internal for now; a curated
-#          public accessor can be added at the docs/release slice if needed.
-# Args:    None.
-# Returns: A cier_method_info data.frame, one row per index.
+#' List the detection indices and their registry properties
+#'
+#' Returns the package's **method registry**: one row per detection index, with
+#' the citable defaults every wrapper reads -- the default cutoff method and
+#' value, the flag direction, the source paper, the optional backend package,
+#' and the screen membership. Use it to see the valid `methods` ids for
+#' [cier_screen()] and to trace where each index's defaults come from.
+#'
+#' @details
+#' The registry is the single source of truth behind the index functions; this
+#' accessor is read-only. Columns:
+#' - `method`: the index function name (also the id for `cier_screen(methods=)`).
+#' - `family`: `"indirect"` (response-pattern) or `"personfit"`.
+#' - `paper_year`, `paper_citation_key`, `doi`: the source paper the default is
+#'   traced to.
+#' - `default_cutoff_method` / `default_cutoff_value`: how the default cutoff is
+#'   resolved (`"percentile"` at a target tail mass, `"fixed"` fraction,
+#'   `"chisq"` tail probability, or `"perfit_null"` Monte-Carlo level) and the
+#'   cited default rate.
+#' - `flag_direction`: which tail flags carelessness (`"upper"` / `"lower"`).
+#' - `companion_methods`: indices commonly paired with this one.
+#' - `backend`: the `Suggests` package that scores the statistic (`NA` for the
+#'   pure indices).
+#' - `screenable`: whether [cier_screen()] runs it.
+#' - `vote_group`: the construct label the screen collapses correlated indices
+#'   under (even-odd and personal reliability share `"consistency"`).
+#' - `notes`: a one-line description.
+#'
+#' @return A data frame (class `cier_method_info`), one row per index, with the
+#'   columns listed under Details.
+#' @seealso [cier_screen()]; the index functions, e.g. [cier_longstring()],
+#'   [cier_irv()], [cier_personal_reliability()]
+#' @family orchestration
+#' @export
+#' @examples
+#' cier_methods()[, c("method", "family", "default_cutoff_method",
+#'                    "flag_direction", "screenable")]
 cier_methods <- function() {
   load_method_registry()
 }
@@ -174,9 +205,3 @@ cier_method_row <- function(method) {
   reg[idx, , drop = FALSE]
 }
 
-# Purpose: Return the family of one method.
-# Args:    method - a registry method id (character scalar).
-# Returns: A length-1 character family label.
-cier_method_family <- function(method) {
-  cier_method_row(method)$family
-}

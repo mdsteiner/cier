@@ -29,6 +29,21 @@ hand_fixture <- function() {
   rbind(c(0, 0), c(1, 2), c(2, 2), c(1, 4))
 }
 
+# Heavy-missingness fixture whose pairwise covariance is invertible but NOT
+# positive definite. Likert 1..5, 30 x 5, 40% MCAR; the seed was searched by
+# dev/find-indefinite-seed.R, which verifies: no all-NA row, solve() succeeds
+# with a finite inverse, chol() FAILS (a negative eigenvalue), and the unguarded
+# bilinear form yields at least one negative D^2.
+indefinite_fixture <- function() {
+  x <- withr::with_seed(2L, {
+    m <- matrix(sample.int(5L, 30L * 5L, replace = TRUE), nrow = 30L)
+    m[sample.int(length(m), 60L)] <- NA # 60 / 150 = 40% missing
+    m
+  })
+  storage.mode(x) <- "double"
+  x
+}
+
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_mahalanobis returns a list-based cier_index with the pinned schema", {
@@ -219,6 +234,46 @@ test_that("an NA-bearing pairwise covariance also abstains with the typed warnin
   expect_true(all(is.na(out$flagged)))
 })
 
+test_that("an indefinite pairwise covariance abstains wholesale with the typed warning", {
+  # Heavy MCAR missingness can leave cov(use = "pairwise") INVERTIBLE yet not
+  # positive definite (a negative eigenvalue): solve() succeeds and the inverse
+  # is finite, so neither earlier guard fires, but the bilinear form is then
+  # signed -- a respondent can score a NEGATIVE "squared distance" that the
+  # upper-tail chi-square flag can never reach, and the ranking among the
+  # positive rows is distorted too. The distance is invalid for EVERY row, so
+  # the kernel abstains wholesale. careless::mahad reproduces the signed values
+  # on this input, so the cross-package parity cannot guard this path -- this
+  # regression test is the only guard (fixture verified by
+  # dev/find-indefinite-seed.R: solve() succeeds, chol() fails, and the
+  # unguarded form yields a negative D^2).
+  x <- indefinite_fixture()
+  expect_warning(out <- cier_mahalanobis(x),
+                 class = "cier_warning_singular_covariance")
+  w <- tryCatch(cier_mahalanobis(x), warning = function(w) w)
+  expect_identical(cier_condition_data(w)$reason, "indefinite_covariance")
+  expect_true(all(is.na(out$value)))
+  expect_true(all(is.na(out$flagged)))
+})
+
+test_that("scored Mahalanobis values are never negative (PD-guarded quadratic form)", {
+  # With the positive-definiteness guard in place, ANY input either abstains
+  # (typed warning, all NA) or scores D^2 from a positive-definite quadratic
+  # form, which is >= 0 for every row -- including rows with missing items on
+  # the zero-fill path. Sweeping missingness fixtures pins the property the
+  # complete-data non-negativity test above cannot reach (its pairwise cov is
+  # PSD by construction).
+  for (seed in 1:8) {
+    x <- withr::with_seed(seed, {
+      m <- matrix(sample.int(5L, 40L * 6L, replace = TRUE), nrow = 40L)
+      m[sample.int(length(m), 72L)] <- NA # 72 / 240 = 30% missing
+      m
+    })
+    storage.mode(x) <- "double"
+    v <- suppressWarnings(cier_mahalanobis(x))$value
+    expect_true(all(v >= 0, na.rm = TRUE))
+  }
+})
+
 test_that("the warning distinguishes the singular vs insufficient-respondents cause", {
   # Class is shared, but the structured payload names which case occurred, so the
   # two messages are genuinely different (asserted without matching message text).
@@ -238,9 +293,11 @@ test_that("the degenerate-cause message names each cause", {
   # not catch it, as it is sourced from the status, not the message.
   sing <- mahalanobis_abstain_message("singular_covariance")
   few <- mahalanobis_abstain_message("insufficient_responses")
+  indef <- mahalanobis_abstain_message("indefinite_covariance")
   expect_match(sing[[1L]], "singular")
   expect_match(few[[1L]], "fewer than two")
-  expect_false(identical(sing[[1L]], few[[1L]]))
+  expect_match(indef[[1L]], "not positive definite")
+  expect_identical(anyDuplicated(c(sing[[1L]], few[[1L]], indef[[1L]])), 0L)
 })
 
 test_that("a non-matrix / non-numeric payload is a typed input error", {

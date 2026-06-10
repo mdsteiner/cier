@@ -153,7 +153,8 @@ screen_skip_reason <- function(method, items, reg_row) {
 
 # Call one index wrapper with the base arguments it needs plus the user's
 # per-index control overrides. Matrix-only indices take just `responses`; the
-# metadata indices also take `items`.
+# metadata indices also take `items`. Returns the `cier_index`, or a character
+# skip REASON when the index aborted on a typed backend limit (see below).
 screen_call_index <- function(method, responses, items, args) {
   base <- if (method %in% screen_items_methods()) {
     list(responses, items)
@@ -169,9 +170,21 @@ screen_call_index <- function(method, responses, items, args) {
   # typed condition (a targeted handler, NOT a blanket suppressWarnings -- e.g. a
   # singular-covariance warning still propagates), and only around the screen's
   # own call; a direct `cier_<index>()` call still warns.
-  withCallingHandlers(
-    do.call(method, c(base, args)),
-    cier_warning_insufficient_items = function(w) invokeRestart("muffleWarning")
+  #
+  # A typed BACKEND LIMIT on otherwise-valid data (cier_error_backend_limit, e.g.
+  # mokken's 10-category ceiling for cier_ht) must not abort the battery: catch
+  # exactly that subclass and return its compact reason so the caller records the
+  # index as skipped. Every other error -- a malformed `items` frame included --
+  # still propagates so the user can fix the input.
+  tryCatch(
+    withCallingHandlers(
+      do.call(method, c(base, args)),
+      cier_warning_insufficient_items = function(w) invokeRestart("muffleWarning")
+    ),
+    cier_error_backend_limit = function(e) {
+      reason <- cier_condition_data(e)$reason
+      if (is.null(reason)) "backend limit" else reason
+    }
   )
 }
 

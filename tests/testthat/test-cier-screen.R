@@ -201,6 +201,34 @@ test_that("an absent backend skips Gnormed/Ht with the package reason", {
                   %in% names(sc$indices)))
 })
 
+test_that("a typed backend limit records a skip instead of crashing the battery", {
+  # cier_ht raises a cier_error_backend_limit on a scale wider than mokken's
+  # 10-category ceiling. Valid 11-point data must NOT abort the whole screen:
+  # the screen catches exactly that subclass, records ht as skipped with the
+  # limit as the reason, and every other selected index still runs and scores.
+  skip_if_not_installed("mokken")
+  x <- withr::with_seed(31L, {
+    m <- matrix(sample.int(11L, 40L * 8L, replace = TRUE), nrow = 40L)
+  })
+  x[1L, 1L] <- 1   # force both extremes: the global range spans 1..11
+  x[2L, 1L] <- 11
+  storage.mode(x) <- "double"
+  it <- data.frame(scale = rep(c("s1", "s2"), each = 4L),
+                   reverse_keyed = FALSE, categories = 11L,
+                   stringsAsFactors = FALSE)
+  sc <- q(cier_screen(x, it,
+                      methods = c("cier_longstring", "cier_irv", "cier_ht")))
+  expect_identical(names(sc$indices), c("cier_longstring", "cier_irv"))
+  expect_identical(sc$skipped$method, "cier_ht")
+  expect_match(sc$skipped$reason, "10-category")
+  # The survivors scored: their flag columns are present and the votes collapse.
+  expect_identical(colnames(sc$flags), c("cier_longstring", "cier_irv"))
+  # A malformed items frame is NOT this path: it still propagates as an error.
+  bad_items <- data.frame(scale = "s1", stringsAsFactors = FALSE)
+  expect_error(cier_screen(x, bad_items, methods = "cier_ht"),
+               class = "cier_error_input")
+})
+
 test_that("items = NULL takes precedence over the backend reason", {
   # When BOTH inputs are missing (no items AND no backend), the items reason is
   # reported -- the structural precondition checked first.
@@ -241,6 +269,22 @@ test_that("a respondent flagged by BOTH consistency members counts once", {
   map <- c(cier_even_odd = "consistency",
            cier_personal_reliability = "consistency")
   expect_identical(ref_screen_n_flags(collapse_votes(flags, map)), 1L)
+})
+
+test_that("vote columns stay in registry order regardless of the methods= order", {
+  # collapse_votes derives group order from the flag columns, which follow the
+  # ran-methods order; that equals registry order only because
+  # screen_resolve_methods re-imposes it upstream. Pin the end-to-end property
+  # directly so a future refactor that honours the user's methods= order cannot
+  # silently reorder the vote columns (the oracle mirrors the same
+  # first-appearance rule and would move in lock-step, not catch it).
+  x <- screen_matrix(40L, 20L, 12L)
+  sc <- q(cier_screen(x, methods = c("cier_person_total", "cier_irv",
+                                     "cier_longstring")))
+  expect_identical(names(sc$indices),
+                   c("cier_longstring", "cier_irv", "cier_person_total"))
+  expect_identical(colnames(sc$votes),
+                   c("cier_longstring", "cier_irv", "cier_person_total"))
 })
 
 test_that("end-to-end, the screen collapses even-odd + PR to ONE vote", {
@@ -439,6 +483,23 @@ test_that("a clean sample flags a modest, sane rate", {
   expect_lt(ag$observed[[2L]], ag$expected[[2L]] + 0.05)
 })
 
+test_that("on real contaminated data the screen makes the agreement excess visible", {
+  # The complement of the clean-sample test above, on the bundled REAL data:
+  # bfi_careless carries a genuine careless subgroup, so flags must CLUSTER on
+  # the same respondents -- the observed >= 2-vote share exceeds the
+  # Poisson-binomial independence baseline. This pins the screen's headline
+  # user-facing behaviour ("contamination is visible") end-to-end; the per-index
+  # oracles cannot. Sanity bound: no construct flags an implausible majority.
+  nm <- names(bfi_careless)[1:44]
+  items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
+                      reverse_keyed = grepl("_R$", nm), categories = 5L)
+  sc <- q(cier_screen(bfi_careless[, 1:44], items, methods = base_methods(),
+                      control = list(cier_personal_reliability = list(seed = 1))))
+  ag <- sc$agreement$agreement
+  expect_gt(ag$observed[[2L]], ag$expected[[2L]])
+  expect_true(all(colMeans(as.matrix(sc$votes)) < 0.5))
+})
+
 # ---- Edge cases -------------------------------------------------------------
 
 test_that("when every selected index is skipped the screen is empty, not an error", {
@@ -582,4 +643,26 @@ test_that("print reports skipped methods with their reasons", {
     sc <- q(cier_screen(screen_matrix(60L, 20L, 9L)))   # items NULL -> 4 skipped
     expect_snapshot(print(sc))
   })
+})
+
+test_that("the excess marker is gated on the binomial tail, not a point comparison", {
+  # Under independence the observed >=k count is Binomial(n, expected_k), so it
+  # exceeds the expectation about half the time on CLEAN data: a strict
+  # observed > expected comparison would advertise sampling noise as
+  # contamination (e.g. "10.0% vs expected 9.8% <- excess"). The marker must
+  # fire only when the one-sided binomial tail is below 0.05.
+  ag <- list(agreement = data.frame(
+    k = 1:2,
+    observed = c(0.10, 0.05),     # n = 60: counts 6 and 3
+    expected = c(0.098, 0.005)
+  ))
+  lines <- screen_agreement_lines(ag, 60L)
+  # k = 1: P(X >= 6 | 60, 0.098) ~ 0.55 -- ordinary noise, no marker.
+  expect_false(grepl("excess", lines[[3L]], fixed = TRUE))
+  # k = 2: P(X >= 3 | 60, 0.005) ~ 0.0036 -- genuine excess, marker fires.
+  expect_true(grepl("excess", lines[[4L]], fixed = TRUE))
+  # A zero observed count never marks, even against a zero expectation.
+  ag0 <- list(agreement = data.frame(k = 1L, observed = 0, expected = 0))
+  expect_false(grepl("excess", screen_agreement_lines(ag0, 60L)[[3L]],
+                     fixed = TRUE))
 })

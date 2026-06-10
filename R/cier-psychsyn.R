@@ -95,9 +95,13 @@ cier_psychsyn <- function(responses, critical_r = 0.60, fpr = NULL,
   # in [-1, 1] (outside it flags everyone or no one); mutually exclusive.
   check_percentile_overrides(fpr, cutoff, lower = -1, upper = 1, call = call)
   row <- cier_method_row("cier_psychsyn")
-  # The kernel returns NA where a respondent has fewer than three complete
-  # synonym pairs (or no pair qualifies at all), so abstention needs no separate
-  # guard -- the shared percentile cutoff abstains when every respondent is NA.
-  value <- kernel_psychsyn(responses, critical_r, "syn")
-  resolve_index_cutoff(value, row, fpr, cutoff, call = call)
+  # One pairing correlation serves discovery and scoring. The kernel returns NA
+  # where a respondent has fewer than three complete synonym pairs; when NO pair
+  # qualifies at all, the shared tail swaps the generic percentile abstention
+  # for the actionable no-pairs warning (cause + remedy).
+  cor_mat <- pairing_cor(responses)
+  pairs <- find_item_pairs(responses, critical_r, "syn", cor_mat = cor_mat)
+  value <- kernel_psychsyn(responses, critical_r, "syn", cor_mat = cor_mat)
+  resolve_pair_index_cutoff(value, row, fpr, cutoff, nrow(pairs) == 0L, "syn",
+                            critical_r, cor_mat, call)
 }

@@ -382,6 +382,19 @@ test_that("honouring reverse_keyed equals pre-scoring for RPR (same seed)", {
   expect_equal(honoured, prescored, tolerance = 1e-12)
 })
 
+test_that("honoured RPR reverse-keying also equals the oracle on pre-scored input", {
+  # The PR analogue above pins keying against the independent oracle; mirror it
+  # for RPR so the resampled path has its own non-self-referential anchor (the
+  # self-consistency check above routes BOTH sides through the production
+  # kernel and could not catch a keying bug symmetric across them).
+  it_rev <- blocked_items(4L, 4L)
+  x <- rand_matrix(25L, 16L, 55L)
+  expect_equal(cier_personal_reliability(x, it_rev, seed = 2L)$value,
+               ref_rpr(prescore(x, it_rev), blocks_from_scale(it_rev),
+                       25L, 2L),
+               tolerance = 1e-10)
+})
+
 # ---- Edge cases -------------------------------------------------------------
 
 test_that("a single-item scale is skipped; remaining scales still score (PR)", {

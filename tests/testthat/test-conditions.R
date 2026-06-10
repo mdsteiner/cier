@@ -123,14 +123,6 @@ test_that("cier_condition_data returns empty list when payload absent", {
   expect_identical(cier_condition_data(raw), list())
 })
 
-test_that("cier_condition_data falls back to the legacy cier_data slot", {
-  raw <- structure(
-    list(message = "x", call = NULL, cier_data = list(arg = "legacy")),
-    class = c("cier_error_input", "cier_error", "error", "condition")
-  )
-  expect_identical(cier_condition_data(raw), list(arg = "legacy"))
-})
-
 test_that("cier_warn and cier_inform return invisibly", {
   expect_null(suppressWarnings(cier_warn("cier_warning_insufficient_items", "x")))
   expect_null(suppressMessages(cier_inform("cier_message_progress", "x")))

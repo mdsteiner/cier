@@ -47,12 +47,14 @@
 #' irv <- cier_irv(bfi_careless[, 1:44])
 #' head(cier_flagged_cases(irv))
 #'
-#' # From a screen: respondents flagged by at least 3 constructs.
+#' # From a screen: respondents flagged by at least 3 constructs. Seed BOTH
+#' # randomised pieces (RPR, Gnormed's Monte-Carlo null) for reproducibility.
 #' nm <- names(bfi_careless)[1:44]
-#' items <- data.frame(scale = gsub("^v_BFI_|[0-9_R]+$", "", nm),
+#' items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
 #'                     reverse_keyed = grepl("_R$", nm), categories = 5L)
 #' screen <- cier_screen(bfi_careless[, 1:44], items,
-#'                       control = list(cier_personal_reliability = list(seed = 1)))
+#'                       control = list(cier_personal_reliability = list(seed = 1),
+#'                                      cier_gnormed = list(seed = 1)))
 #' cier_flagged_cases(screen, min_votes = 3)
 cier_flagged_cases <- function(x, ...) {
   UseMethod("cier_flagged_cases")

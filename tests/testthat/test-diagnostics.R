@@ -60,6 +60,15 @@ test_that("per_vote reports observed rates; null_rate drives excess + informativ
   expect_identical(pv1$informative, c(FALSE, FALSE, TRUE))
   expect_equal(pv1$excess[[3L]], p[[3L]] - 0.001)
   expect_identical(pv1$excess[1:2], rep(NA_real_, 2L))
+
+  # `informative` means "a calibrated null was SUPPLIED", not "observed exceeds
+  # it": a vote observed BELOW its null stays informative with a negative
+  # excess. Pins the documented contract so a sign-gating refactor
+  # (informative = excess > 0) cannot pass silently.
+  nr_high <- c(NA_real_, NA_real_, 0.9)
+  pv2 <- flag_agreement(flags, null_rate = nr_high)$per_vote
+  expect_identical(pv2$informative, c(FALSE, FALSE, TRUE))
+  expect_lt(pv2$excess[[3L]], 0)
 })
 
 test_that("null_rate of the wrong length is a typed input error", {

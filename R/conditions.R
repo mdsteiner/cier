@@ -71,7 +71,7 @@ cier_abort <- function(class, message, ..., data = list(),
   cli::cli_abort(
     message = message, ...,
     class = cier_condition_classes(class, "error"),
-    data = data, cier_data = data, call = call, .envir = .envir
+    data = data, call = call, .envir = .envir
   )
 }
 
@@ -91,7 +91,7 @@ cier_warn <- function(class, message, ..., data = list(),
   cli::cli_warn(
     message = message, ...,
     class = cier_condition_classes(class, "warning"),
-    data = data, cier_data = data, call = call, .envir = .envir
+    data = data, call = call, .envir = .envir
   )
   invisible(NULL)
 }
@@ -111,7 +111,7 @@ cier_inform <- function(class, message, ..., data = list(),
   cli::cli_inform(
     message = message, ...,
     class = cier_condition_classes(class, "message"),
-    data = data, cier_data = data, .envir = .envir
+    data = data, .envir = .envir
   )
   invisible(NULL)
 }
@@ -119,17 +119,14 @@ cier_inform <- function(class, message, ..., data = list(),
 #' Pull the structured payload out of a cier condition
 #'
 #' Conditions raised through the helpers above carry a named list in the
-#' `data` slot. This centralises extraction with a fallback for the legacy
-#' slot name.
+#' `data` slot. This centralises extraction (production reads it in the
+#' screen's backend-limit handler; tests read it to assert payloads).
 #'
 #' @param cond A condition object.
-#' @return The structured payload, or an empty named list if absent.
+#' @return The structured payload, or an empty list if absent.
 #' @keywords internal
 #' @noRd
 cier_condition_data <- function(cond) {
   data <- cond$data
-  if (is.null(data)) {
-    data <- cond$cier_data
-  }
   if (is.null(data)) list() else data
 }

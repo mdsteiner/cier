@@ -245,9 +245,10 @@ check_items_reverse <- function(items, n_items, arg, call) {
 
 # `categories`: number of response options per item. Required -- a finite whole
 # number >= 2 -- only on items that are reverse-keyed (so they can be
-# reverse-scored as (categories + 1) - x); NA is permitted on forward items and
-# the column may be absent entirely when nothing is reverse-keyed. Returns the
-# column unchanged (or NULL when absent).
+# reverse-scored as (min + max) - x, the classic (categories + 1) - x when the
+# scale base min is 1; check_items_min below validates the base); NA is
+# permitted on forward items and the column may be absent entirely when nothing
+# is reverse-keyed. Returns the column unchanged (or NULL when absent).
 check_items_categories <- function(items, reverse_keyed, arg, call) {
   cats <- items$categories
   if (!any(reverse_keyed)) {

@@ -170,7 +170,10 @@ resolve_gnormed_cutoff <- function(fit, fpr, cutoff, default_fpr, seed,
 # integer before coefH, whose printed coefficient matrices are captured. A
 # fractional cell is a contract violation -- the integer cast would truncate it
 # silently -- so assert_integer_responses() raises a typed cier_error_input first,
-# before any abstention short-circuit.
+# before any abstention short-circuit. A complete block whose zero-based range
+# exceeds 9 hits mokken's 10-category ceiling: that raw stop() is converted into
+# a typed cier_error_input carrying the cier_error_backend_limit subclass (so
+# cier_screen() can skip-with-reason rather than crash).
 kernel_ht <- function(responses, call = rlang::caller_env()) {
   n <- nrow(responses)
   value <- rep(NA_real_, n)
@@ -190,6 +193,24 @@ kernel_ht <- function(responses, call = rlang::caller_env()) {
     return(value)
   }
   z <- z - min(z)
+  # mokken::coefH (via its check.data) hard-stops when the GLOBAL zero-based
+  # range exceeds 9 -- "mokken cannot ... handle [more than] 10 categories" -- a
+  # backend ceiling, not a data defect. Convert that raw stop() into a typed
+  # condition here (mirroring personfit_zero_base for PerFit). The extra
+  # cier_error_backend_limit subclass lets cier_screen() catch exactly this case
+  # and record the index as skipped instead of aborting the whole battery.
+  if (max(z) > 9L) {
+    cier_abort(
+      c("cier_error_backend_limit", "cier_error_input"),
+      c("Ht cannot score a scale wider than 10 response categories.",
+        "x" = "Observed zero-based range: {.val {c(0L, max(z))}} (limit 0..9).",
+        "i" = "The mokken backend supports at most 10 categories; recode or \\
+               drop the wide items, or use another index."),
+      data = list(arg = "responses", observed = max(z) + 1L,
+                  reason = "scale wider than mokken's 10-category limit"),
+      call = call
+    )
+  }
   storage.mode(z) <- "integer"
   utils::capture.output(
     res <- suppressWarnings(mokken::coefH(t(z), se = FALSE))

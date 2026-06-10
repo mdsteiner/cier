@@ -1,5 +1,6 @@
 # Method-properties registry: loader, accessors, and the validator that
-# guards the hand-maintained CSV. (cier_methods is internal in pre-release.)
+# guards the hand-maintained CSV. (cier_methods() is exported: it is the
+# accessor the unknown-method error hints point users to.)
 
 registry_schema_columns <- function() {
   c("method", "family", "paper_year", "paper_citation_key", "doi",
@@ -47,6 +48,12 @@ test_that("the registry loads as a 10-row, 13-column object and caches", {
   expect_identical(cier_methods(), reg)
 })
 
+test_that("cier_methods is exported (the unknown-method error hints point to it)", {
+  # Two user-facing aborts say "See cier_methods() for the available set"; the
+  # hint must resolve for a user, so the accessor stays exported.
+  expect_true("cier_methods" %in% getNamespaceExports("cier"))
+})
+
 test_that("each row's behaviourally-binding fields match the spec", {
   reg <- cier_methods()
   exp <- expected_registry()
@@ -83,9 +90,9 @@ test_that("personal_reliability cites the resampled-PR paper", {
   expect_identical(row$doi, "10.3758/s13428-024-02506-0")
 })
 
-test_that("accessors return one row / the family and reject bad input", {
+test_that("cier_method_row returns one row and rejects bad input", {
   expect_identical(nrow(cier_method_row("cier_longstring")), 1L)
-  expect_identical(cier_method_family("cier_gnormed"), "personfit")
+  expect_identical(cier_method_row("cier_gnormed")$family, "personfit")
   expect_error(cier_method_row("not_a_method"), class = "cier_error_input")
   expect_error(cier_method_row(123L), class = "cier_error_input")
 })

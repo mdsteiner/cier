@@ -75,14 +75,28 @@ that excess is informative only for the null-referenced indices (Mahalanobis
 chi-square, the person-fit Monte-Carlo nulls) and is marked tautological (NA)
 for the empirical-percentile votes.
 
+The printed table's `<- excess` marker is **gated on chance**, not on a strict
+point comparison. The expectation is an exact population quantity while the
+observed share is a sample proportion, so under true independence the observed
+exceeds the expected about half the time at each k — a bare `observed >
+expected` marker fired on ~50% of clean, contamination-free screens (and on
+rounding-invisible gaps like "0.3% vs expected 0.0%"). Each respondent is
+independently flagged by >= k votes with probability `expected[k]` under the
+null, so the observed count is Binomial(n, `expected[k]`); the marker now fires
+only when the one-sided binomial tail P(count >= observed) is below 0.05. Still
+descriptive (the per-k rows are not independent of each other; no multiplicity
+correction), but it no longer advertises ordinary sampling noise as
+contamination.
+
 ## Architecture: function-first indices
 
 Each index is a documented function on a response matrix (a data.frame or
 tibble is accepted and coerced internally, so users need not call
 `as.matrix()`), not a method behind an input-object pipeline. The four indices
 that need item metadata (even-odd, personal reliability, Gnormed, Ht) take a
-single optional `items` data.frame with columns `scale`, `reverse_keyed`, and
-`categories` (one row per item); the other six need only the responses. An index
+single optional `items` data.frame with columns `scale`, `reverse_keyed`,
+`categories`, and (optionally) `min`, the scale base for 0-based or bipolar
+codings (one row per item); the other six need only the responses. An index
 returns a light `cier_index` — a list-based S3 object (see "Object schema:
 list-based `cier_index`" below) — assembled by one shared `new_cier_index()`
 constructor. `cier_screen()` is a thin orchestrator that runs the selected
@@ -132,24 +146,32 @@ runs: `check_open_unit()` for a rate in the open interval `(0, 1)` (`fpr` /
 `check_number()` for a literal `cutoff` against index-specific bounds (`[1, p]`
 for longstring, `[0, Inf)` for a non-negative score). Immediately after those
 checks the wrapper calls `assert_single_override()` (reject both knobs), then the
-kernel runs. The cutoff dispatch is then a plain conditional inline in the
-wrapper: **a literal `cutoff` is used verbatim** (already validated); otherwise
-the rate-based default is resolved through the one resolver,
+kernel runs. The cutoff dispatch is **a literal `cutoff` used verbatim** (already
+validated); otherwise the rate-based default resolved through the one resolver,
 `resolve_cutoff(method = <registry method>, …)`. `resolve_cutoff()` and its
 private helpers are internal and do **no** input re-checking (their `method` /
 `direction` come from the registry and the rate/literal are wrapper-validated) —
 they only do the math and signal the runtime percentile abstention
 (`NA_real_` + `cier_warning_insufficient_items`).
 
-This keeps the one-cutoff-path rule — every rate-based **default** still resolves
-through the single `resolve_cutoff()` — while removing the earlier
-`resolve_index_cutoff()` indirection (a shared helper that took a per-index
-`rate_fn` closure). Inlining the two-line dispatch in each wrapper is shorter and
-more legible than the closure it replaced, and putting all validation in the
-public function gives the earliest possible failure. The cost is that a future
-wrapper which forgets to validate would pass bad input silently rather than get a
-typed error; the mitigation is the wrapper-validation convention plus per-wrapper
-input-error tests.
+Where that dispatch lives depends on the cutoff family. The **percentile**
+indices (IRV, even-odd, person-total, personal reliability, Ht, and — via the
+no-pairs-aware tail — psychsyn / psychant) share one helper,
+`resolve_index_cutoff(value, row, fpr, cutoff, call)`, which composes the
+dispatch with `apply_flag()` and `new_cier_index()` into the common
+cutoff → flag → assemble tail; their wrappers end in that single call. The
+non-percentile wrappers — longstring (`fixed`), Mahalanobis (`chisq`), and
+Gnormed (`perfit_null`, resolved at the bridge from the fitted object) — inline
+their own two-line dispatch, since each computes its cutoff differently. (An
+earlier revision of this section described `resolve_index_cutoff()` as removed
+in favour of fully-inlined dispatch; the shared helper was reinstated — without
+the `rate_fn` closure it once took — when the percentile tail turned out to be
+repeated verbatim across wrappers.) The one-cutoff-path rule holds throughout:
+every rate-based **default** resolves through the single `resolve_cutoff()`.
+Putting all validation in the public function gives the earliest possible
+failure. The cost is that a future wrapper which forgets to validate would pass
+bad input silently rather than get a typed error; the mitigation is the
+wrapper-validation convention plus per-wrapper input-error tests.
 
 ## Method-properties registry schema
 
@@ -182,6 +204,18 @@ Guttman errors (Gnormed) via `PerFit`, person scalability (Ht) via `mokken`.
 serve polytomous Likert responses; `mokken::coefH` on the transposed scale is the
 polytomous Ht that matches the reference values. Both packages are optional
 (`Suggests`), with a graceful skip when absent.
+
+**Backend limits are typed and screen-survivable.** A backend's hard ceiling on
+otherwise-valid data — concretely, `mokken`'s 10-category limit (`coefH` raw-
+stops when the global zero-based range exceeds 9, so an 11-point or 0–100 item
+cannot be scored) — is converted at the bridge into a typed `cier_error_input`
+carrying an extra `cier_error_backend_limit` subclass, mirroring how
+`personfit_zero_base()` converts `PerFit`'s terse aborts. The subclass exists
+for `cier_screen()`: the screen catches **exactly** that class and records the
+index as skipped-with-reason (the condition's `data$reason`), so one index's
+backend ceiling cannot crash a ten-index battery; every other error — a
+malformed `items` frame included — still propagates. A direct `cier_ht()` call
+gets the typed error with the limit and remedy spelled out.
 
 ## Gnormed cutoff: PerFit Monte-Carlo null
 
@@ -221,8 +255,9 @@ items never co-answered, or an item answered by nobody — which yields a non-fi
 inverse rather than a `solve()` error) — every respondent's `value` is `NA` and
 no one is flagged, and
 the wrapper raises a typed `cier_warning_singular_covariance` whose structured
-`data$reason` names the cause (`"insufficient_responses"` or
-`"singular_covariance"`). A silent all-`NA` result was rejected: a singular
+`data$reason` names the cause (`"insufficient_responses"`,
+`"singular_covariance"`, or `"indefinite_covariance"`). A silent all-`NA` result
+was rejected: a singular
 covariance is a substantive, actionable analyst event (a collinear or
 over-wide item set), so it earns its own condition class rather than being folded
 into the cutoff layer's `cier_warning_insufficient_items`. This is the only
@@ -230,6 +265,30 @@ wholesale-abstention case that warns; an individual all-`NA` respondent (alongsi
 others who answered) is ordinary per-row abstention and stays silent, as in every
 other index. The kernel itself stays pure — it returns a status code, and the
 wrapper raises the condition.
+
+The third cause, an **indefinite** pairwise covariance, was added after review:
+pairwise estimation assembles each covariance cell from a different subsample, so
+under heavy or structured missingness the cells can be mutually inconsistent and
+the matrix gains a negative eigenvalue while `solve()` still succeeds. The
+bilinear form is then signed — a respondent can score a *negative* "squared
+distance" that the upper-tail chi-square flag can never reach, and the ranking
+among the positive rows is distorted too — so the distance is invalid for every
+row and the kernel abstains wholesale (`chol()` is the test: it errors iff the
+matrix is not positive definite; the inverse still comes from `solve()`, keeping
+every positive-definite input byte-identical to the parity partners). Two
+alternatives were evaluated and rejected. **Repairing the matrix** (projecting to
+the nearest positive-definite matrix, e.g. `Matrix::nearPD()`) produces a
+statistic that traces to no cited paper and no trusted package — it would diverge
+*by construction* from `careless::mahad()` / `psych::outlier()` exactly on these
+inputs, so the cross-package parity layer could no longer pin the kernel, and it
+silently masks the data problem (the missingness pattern) the researcher needs to
+see; the projection also carries its own tuning knobs (`eig.tol`, `conv.tol`)
+with no reference value to validate against. **A hard abort** is inconsistent
+with the established degenerate-covariance contract (singular Σ warns and
+abstains) and would kill an entire `cier_screen()` run over one index's data
+problem. Note that `careless::mahad()` itself returns the signed values on such
+input, so the parity suite cannot guard this path — the dedicated
+indefinite-fixture regression test is the only guard.
 
 ## Psychsyn/psychant kernel: vectorise (masked-sum), relax careless parity to 1e-12
 
@@ -262,6 +321,52 @@ uniformity with the already-vectorised `kernel_person_total` (itself `1e-12` vs
 `PerFit`, for the same summation-order reason). The kernel stays a single pure
 function shared by psychsyn (`pairing = "syn"`) and psychant (`"ant"`), so the
 antonym index inherits both the speedup and the same tolerance.
+
+A no-pairs result (no inter-item correlation clears `critical_r`, the common
+case on broad inventories at the 0.60 default) warns with a **tailored** typed
+condition, `cier_warning_no_pairs`, naming `critical_r`, the strongest in-tail
+correlation, and the `cier_psychsyn_critval()` sweep — instead of the generic
+percentile abstention ("no finite values remain"), which names neither cause
+nor remedy. The subclass deliberately also carries
+`cier_warning_insufficient_items` so `cier_screen()`'s targeted muffler keeps
+covering it (the screen reports the case transparently as "0 / 0").
+
+## Zero-variance abstention: exact, not cancellation-dependent
+
+The two masked-sum Pearson kernels (`kernel_person_total`, `kernel_psychsyn`)
+document that a constant (straightliner) respondent — or constant pair side —
+has an undefined correlation and abstains (`NA`). For an integer constant the
+deviation sum-of-squares cancels to exactly 0 and the abstention falls out of
+the non-finite check; but for a **non-integer** constant (POMP / rescaled /
+averaged scores are documented numeric input) floating cancellation lands the
+term a few ulp on *either* side of zero. Tiny-negative sent `sqrt()` to `NaN`
+with a leaked base-R locale-dependent warning (breaking the cli-only typed-
+condition contract); tiny-positive leaked a spurious finite score — ~1e-7 for
+person-total, ~1.0 (a perfect consistency score!) for psychsyn — that wrongly
+entered the percentile pool and the flag denominator. Both kernels now (a)
+clamp the variance terms at zero under the `sqrt` (silencing the warning) and
+(b) detect a constant row/side **exactly** — masked `min == max` over the
+answered values — and force `NA`, independent of which way the cancellation
+fell. No tolerance is involved (exact float equality only), so no genuinely
+varying respondent can be swept into abstention, and the cross-package parity
+is unaffected (`careless` returns `NA` for these rows too, via `cor()`'s
+zero-variance `NA`).
+
+## Reverse-keying: the declared range is cross-checked against the data
+
+`apply_split_half_keying()` validates more than the metadata's internal
+type-consistency: before reflecting, it checks that every reverse-keyed
+column's **observed** responses lie within the declared
+`[min, min + categories - 1]`. A type-valid but wrong declaration — the classic
+case is 0-based data declared `categories = 5` with the default `min = 1`,
+reflecting `0 -> 6` / `4 -> 2` — previously produced off-scale reflected values
+that silently corrupted the consistency score (flipping a substantial share of
+flags with no signal to the user). The person-fit bridges already catch the
+identical mistake in `personfit_zero_base()`; this gives the split-half family
+(and Ht's reverse items) the equivalent typed `cier_error_input`, naming the
+offending items. Only reverse-keyed columns are checked (forward items are
+never reflected, and their `categories` is never read), and an all-NA reverse
+column has no observed range to violate.
 
 ## cier_screen: a transparent flag-table combiner, no single label
 

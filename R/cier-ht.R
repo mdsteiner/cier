@@ -32,7 +32,11 @@
 #' Supply the raw responses and declare reverse items through `items`. Only
 #' reverse-keyed items need a `categories` value (used to reverse-score them);
 #' `mokken` itself accepts a mix of category counts, so no common number of
-#' response categories is required.
+#' response categories is required. `mokken` does, however, impose a **ceiling
+#' of 10 response categories**: a scale whose responses span more than 10
+#' distinct points (an 11-point or 0--100 item, for example) cannot be scored,
+#' and the index raises a typed error naming the limit. Recode or drop the wide
+#' items, or use another index.
 #'
 #' **Cutoff -- an empirical percentile (a ranking convention).** Ht's default
 #' cutoff is the `fpr` quantile of the observed scores (the 5th percentile by
@@ -71,7 +75,8 @@
 #'   and an optional integer `min` (the scale base; default `1`, declare it for a
 #'   0-based or bipolar scale) so it can be reverse-scored. Forward-keyed items
 #'   need no metadata, and `categories` may be heterogeneous across items
-#'   (`mokken` does not require a common number of response categories).
+#'   (`mokken` does not require a common number of response categories, but it
+#'   caps every item at 10 categories -- see Details).
 #' @param fpr Optional target false-positive tail mass for the percentile cutoff.
 #'   `NULL` (default) uses the registry default `0.05`. A finite number in the open
 #'   interval `(0, 1)`; the cutoff is that lower-tail quantile of the observed

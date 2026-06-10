@@ -186,6 +186,27 @@ test_that("a constant (straightliner) row abstains (zero variance -> NA)", {
   expect_false(is.na(out$value[[1L]]))
 })
 
+test_that("a NON-INTEGER straightliner abstains exactly, with no leaked base-R warning", {
+  # An integer constant cancels the deviation sum-of-squares to exactly 0, but a
+  # decimal constant (POMP / rescaled / averaged scores are documented numeric
+  # input) lands it a few ulp on EITHER side of zero: tiny-negative used to leak
+  # an untyped base-R "NaNs produced" warning through sqrt(), tiny-positive used
+  # to leak a spurious finite ~1e-7 score that wrongly entered the percentile
+  # pool and the flag count. The kernel now detects the constant row exactly
+  # (masked min == max), so every constant abstains silently regardless of which
+  # way the cancellation fell. 2.597092 / 1.663422 landed tiny-negative /
+  # tiny-positive at k = 12 under the old kernel; 0.3 and 0.05 are realistic
+  # decimal codings.
+  for (const in c(2.597092, 1.663422, 0.3, 0.05)) {
+    x <- rand_matrix(n = 6L, p = 12L, seed = 8L)
+    x[1L, ] <- const
+    expect_no_warning(out <- cier_person_total(x))
+    expect_true(is.na(out$value[[1L]]))
+    expect_true(is.na(out$flagged[[1L]]))
+    expect_false(anyNA(out$value[-1L]))    # the varied rows still score
+  }
+})
+
 test_that("a flat item-mean profile abstains (zero variance on the item side)", {
   # Distinct from the k < 3 path: this circulant answers every item (k = 4) and
   # every row is non-constant, but the column means are all equal (2.5), so the

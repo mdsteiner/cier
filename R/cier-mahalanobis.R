@@ -7,19 +7,28 @@
 #   - The cutoff routes through the single resolve_cutoff() path (chisq method,
 #     upper direction, df = item count, alpha = 0.001 by default).
 
-# Compose the cli message for the degenerate-covariance warning. Both causes
+# Compose the cli message for the degenerate-covariance warning. All causes
 # share the cier_warning_singular_covariance class; the leading line names which
 # one occurred so the message (not only the class) is informative. The cause is
 # pasted in (not cli-interpolated) because it is local to this helper, outside
-# the environment cli sees when the wrapper raises the warning.
+# the environment cli sees when the wrapper raises the warning. The indefinite
+# cause carries an extra advice line: it arises from heavy or structured
+# missingness, which the researcher can act on.
 mahalanobis_abstain_message <- function(status) {
-  cause <- if (identical(status, "singular_covariance")) {
-    "the covariance matrix is singular"
-  } else {
+  cause <- switch(status,
+    singular_covariance   = "the covariance matrix is singular",
+    indefinite_covariance = "the pairwise covariance is not positive definite",
     "fewer than two respondents have data"
+  )
+  msg <- c(paste0("Mahalanobis distance is undefined: ", cause, "."),
+           "i" = "All respondents abstain (value = {.val NA}); no one is flagged.")
+  if (identical(status, "indefinite_covariance")) {
+    msg <- c(msg,
+             "i" = paste0("Heavy or structured missingness can make the pairwise ",
+                          "covariance inconsistent; consider scoring complete ",
+                          "cases or reducing missingness."))
   }
-  c(paste0("Mahalanobis distance is undefined: ", cause, "."),
-    "i" = "All respondents abstain (value = {.val NA}); no one is flagged.")
+  msg
 }
 
 #' Mahalanobis-distance C/IER index
@@ -46,13 +55,19 @@ mahalanobis_abstain_message <- function(status) {
 #' `confidence = 0.99`, i.e. `alpha = 0.01`); pass `alpha = 0.01` to reproduce
 #' the `careless` default. Override the cutoff with **one** of two mutually
 #' exclusive arguments: `alpha` (the chi-square tail probability) or `cutoff`
-#' (a literal threshold on D²).
+#' (a literal threshold on D²). The cutoff keeps `df = p` (the full item count)
+#' for **every** respondent, including rows with missing items whose D²
+#' accumulates over fewer dimensions -- flagging is therefore conservative
+#' (lenient) for partial rows, matching `careless::mahad()`.
 #'
 #' **Abstention.** A respondent who answered nothing (an all-`NA` row) abstains:
 #' both `value` and `flagged` are `NA`. If **no** distance can be computed for
-#' anyone -- fewer than two respondents carry any data, or the covariance matrix
+#' anyone -- fewer than two respondents carry any data, the covariance matrix
 #' is singular (for example more items than respondents, or perfectly collinear
-#' items) -- every `value` is `NA`, a warning is emitted, and no one is flagged.
+#' items), or the pairwise covariance is **indefinite** (under heavy or
+#' structured missingness the pairwise-estimated covariance can lose positive
+#' definiteness, making the distance signed and so invalid for every row) --
+#' every `value` is `NA`, a warning is emitted, and no one is flagged.
 #'
 #' @section What this catches:
 #' Multivariate outliers: response profiles inconsistent with the sample's

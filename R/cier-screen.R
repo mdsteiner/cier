@@ -44,7 +44,11 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' [cier_gnormed()], [cier_ht()]) are **skipped with a recorded reason** when
 #' `items` is `NULL`; the two backed by a `Suggests` package ([cier_gnormed()] via
 #' `PerFit`, [cier_ht()] via `mokken`) are skipped when that package is not
-#' installed. The skipped indices and their reasons are in `$skipped`. A genuinely
+#' installed. An index that hits a typed **backend limit** on otherwise-valid
+#' data (for example `mokken`'s 10-category ceiling for [cier_ht()]) is likewise
+#' recorded as skipped with the limit as the reason, so one index's ceiling
+#' never aborts the battery. The skipped indices and their reasons are in
+#' `$skipped`. A genuinely
 #' malformed `items` frame is **not** skipped -- the index's own typed error is
 #' left to surface so you can fix the metadata.
 #'
@@ -73,7 +77,11 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' reports, for each level k, the
 #' observed share of respondents flagged by at least k votes against the share
 #' expected if the votes fired independently; observed far above expected makes a
-#' clustered careless subgroup visible. The Mahalanobis chi-square and Gnormed
+#' clustered careless subgroup visible. In the printed table the `<- excess`
+#' marker appears only where the observed count would be unlikely under vote
+#' independence (a one-sided binomial tail below 0.05) -- a descriptive guard so
+#' ordinary sampling noise is not advertised as contamination, not a formal
+#' test. The Mahalanobis chi-square and Gnormed
 #' Monte-Carlo votes carry their calibrated null nominal (the rest are
 #' percentile, hence `NA`).
 #'
@@ -95,7 +103,8 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #'   `NULL` (default) runs only the six matrix-only indices and skips the four
 #'   metadata indices with a recorded reason.
 #' @param methods Optional character vector of method ids to run.
-#'   `NULL` (default) runs every screenable index. An unknown id is a typed error.
+#'   `NULL` (default) runs every screenable index. An unknown id is a typed
+#'   error; see [cier_methods()] for the available set.
 #' @param control Optional named list of per-index argument overrides, keyed by
 #'   method id; each entry is a list of arguments forwarded to that index (for
 #'   example `fpr`, `alpha`, `cutoff`, `seed`, `critical_r`, `n_resamples`). Names
@@ -130,15 +139,17 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' # The 44 BFI items are the first 44 columns of the bundled example data; a
 #' # trailing "_R" in the column name marks a reverse-keyed item, and the scale
 #' # is the BFI domain (the letters between the "v_BFI_" prefix and the item
-#' # number, e.g. EX, AG, CON, NEU, OP).
+#' # number, e.g. EX, AG, CON, NEU, OP). Seed BOTH randomised pieces (RPR's
+#' # resampling, Gnormed's Monte-Carlo null) for a reproducible screen.
 #' nm <- names(bfi_careless)[1:44]
 #' items <- data.frame(
-#'   scale = gsub("^v_BFI_|[0-9_R]+$", "", nm),
+#'   scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1", nm),
 #'   reverse_keyed = grepl("_R$", nm),
 #'   categories = 5L
 #' )
 #' screen <- cier_screen(bfi_careless[, 1:44], items,
-#'                       control = list(cier_personal_reliability = list(seed = 1)))
+#'                       control = list(cier_personal_reliability = list(seed = 1),
+#'                                      cier_gnormed = list(seed = 1)))
 #' screen
 #' head(as.data.frame(screen))
 cier_screen <- function(responses, items = NULL, methods = NULL,
@@ -152,12 +163,19 @@ cier_screen <- function(responses, items = NULL, methods = NULL,
   skipped_rows <- list()
   for (m in selected) {
     reason <- screen_skip_reason(m, items, reg[reg$method == m, , drop = FALSE])
-    if (!is.na(reason)) {
-      skipped_rows[[length(skipped_rows) + 1L]] <-
-        data.frame(method = m, reason = reason, stringsAsFactors = FALSE)
-      next
+    if (is.na(reason)) {
+      # screen_call_index returns a character skip reason instead of an index
+      # when the call hit a typed backend limit (e.g. mokken's 10-category
+      # ceiling); any other error propagates.
+      res <- screen_call_index(m, responses, items, control[[m]])
+      if (!is.character(res)) {
+        indices[[m]] <- res
+        next
+      }
+      reason <- res
     }
-    indices[[m]] <- screen_call_index(m, responses, items, control[[m]])
+    skipped_rows[[length(skipped_rows) + 1L]] <-
+      data.frame(method = m, reason = reason, stringsAsFactors = FALSE)
   }
   build_cier_screen(indices, skipped_rows, reg, control, nrow(responses))
 }
@@ -193,7 +211,15 @@ screen_index_lines <- function(x) {
 }
 
 # The agreement table: observed share flagged by >= k votes vs the independence
-# baseline, with the counts derived from the collapsed votes.
+# baseline, with the counts derived from the collapsed votes. The "<- excess"
+# marker is gated on chance, not on a strict point comparison: under
+# independence each respondent is flagged by >= k votes with probability
+# `expected[k]` (the exact Poisson-binomial tail), so the observed COUNT is
+# Binomial(n, expected[k]) and would exceed the expectation about half the time
+# on clean data. The marker therefore fires only when the one-sided binomial
+# tail P(count >= observed) falls below 0.05 -- a descriptive guard against
+# advertising pure sampling noise as contamination, not a formal calibrated
+# test (the per-k rows are also not independent of each other).
 screen_agreement_lines <- function(agreement, n) {
   if (is.null(agreement)) {
     return(character(0L))
@@ -201,7 +227,8 @@ screen_agreement_lines <- function(agreement, n) {
   ag <- agreement$agreement
   body <- vapply(seq_len(nrow(ag)), function(i) {
     obs_n <- round(ag$observed[i] * n)
-    mark <- if (ag$observed[i] > ag$expected[i] + 1e-9) "  <- excess" else ""
+    tail_p <- stats::pbinom(obs_n - 1L, n, ag$expected[i], lower.tail = FALSE)
+    mark <- if (tail_p < 0.05) "  <- excess" else ""
     sprintf("  flagged by >= %d vote%s: %d / %d (%.1f%%); expected %.1f%%%s",
             ag$k[i], if (ag$k[i] == 1L) "" else "s", obs_n, n,
             100 * ag$observed[i], 100 * ag$expected[i], mark)
@@ -260,5 +287,10 @@ as.data.frame.cier_screen <- function(x, ...) {
                flagged = ix$flagged, vote_group = unname(x$vote_group[[m]]),
                stringsAsFactors = FALSE)
   })
-  do.call(rbind, pieces)
+  out <- do.call(rbind, pieces)
+  # An index value vector can carry the input's row names (kernels do not strip
+  # them), which data.frame() would adopt and rbind() then de-duplicate into
+  # mangled labels; a tidy long table always shows the plain integer row index.
+  rownames(out) <- NULL
+  out
 }

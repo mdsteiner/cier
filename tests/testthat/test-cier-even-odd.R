@@ -266,6 +266,42 @@ test_that("apply_split_half_keying handles per-item categories with a declared m
                c(1, 1, 3, 1), tolerance = 1e-12)
 })
 
+test_that("responses outside the declared reverse-keying range are a typed error", {
+  # A type-valid but WRONG declaration used to reflect to off-scale values and
+  # silently corrupt the consistency score (flipping flags with no signal). The
+  # keying step now cross-checks the observed range of every reverse-keyed
+  # column against [min, min + categories - 1] and aborts naming the offenders
+  # -- the same mistake the person-fit bridges already catch in
+  # personfit_zero_base(). The classic trigger: 0-based data (0..4, five
+  # options) declared categories = 5 but with the default min = 1, which would
+  # reflect 0 -> 6 and 4 -> 2.
+  x <- rand_matrix(20L, 12L, 3L) - 1     # 0..4 coding
+  it <- blocked_items(3L, 4L)            # categories = 5, min defaults to 1
+  expect_error(cier_even_odd(x, it), class = "cier_error_input")
+  expect_error(cier_personal_reliability(x, it), class = "cier_error_input")
+  # Declaring the true base scores cleanly (the guard keys on the declaration).
+  it$min <- 0L
+  expect_s3_class(cier_even_odd(x, it), "cier_index")
+  # A declared categories SMALLER than the data is the other direction: 1..5
+  # data with categories = 3 would reflect 5 -> -1.
+  it2 <- blocked_items(3L, 4L, categories = 3L)
+  expect_error(cier_even_odd(rand_matrix(20L, 12L, 3L), it2),
+               class = "cier_error_input")
+})
+
+test_that("the range cross-check ignores forward items and all-NA reverse columns", {
+  # Only reverse-keyed columns are reflected, so only they are checked: a
+  # forward item may exceed the declared range without error (categories is not
+  # read for it), and an all-NA reverse column has no observed range to violate.
+  it <- data.frame(scale = rep(c("A", "B"), each = 2L),
+                   reverse_keyed = c(FALSE, TRUE, FALSE, TRUE),
+                   categories = 5L)
+  x <- rand_matrix(10L, 4L, 5L)
+  x[, 1L] <- 9                           # forward item off the declared range
+  x[, 2L] <- NA_real_                    # all-NA reverse column
+  expect_s3_class(suppressWarnings(cier_even_odd(x, it)), "cier_index")
+})
+
 # A keying pattern that is NOT aligned to the even/odd partition: one reverse
 # item per scale at a rotating within-scale position (1, 2, 3, 4). With the
 # alternating default, every reverse item lands on an even position, so a

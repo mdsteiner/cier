@@ -45,6 +45,15 @@
 #' exclusive arguments: `fpr` (the nominal level) or `cutoff` (a literal threshold
 #' on the score).
 #'
+#' **The sample must span the declared scale.** PerFit's item-step popularities
+#' are undefined when a scale end never occurs, so the complete-case block must
+#' **attain both extremes**: the lowest and the highest of the declared
+#' `categories` must each be chosen at least once somewhere in the sample. A
+#' perfectly valid dataset in which, say, nobody ever picked the top category
+#' raises a typed error rather than scoring -- check `categories` / `min`
+#' against the data, or expect this on small samples with rarely-endorsed
+#' extreme categories.
+#'
 #' **Abstention.** Because [PerFit::Gnormed.poly()] needs complete data, a
 #' respondent with **any** missing cell is excluded: both `value` and `flagged`
 #' are `NA` and the row is dropped from the flag count and rate. If fewer than two

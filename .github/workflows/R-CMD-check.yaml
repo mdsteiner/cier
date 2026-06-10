@@ -63,6 +63,10 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
       # Run the skip_on_cran() guards and snapshot tests against the source.
       NOT_CRAN: true
+      # Fail loudly (test-parity-partners.R) if a cross-package parity partner
+      # (careless / psych / PerFit / mokken) did not install: the parity layer
+      # must not silently skip in CI.
+      CIER_REQUIRE_PARITY: true
 
     steps:
       - uses: actions/checkout@v4
