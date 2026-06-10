@@ -20,7 +20,7 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -43,11 +43,13 @@ jobs:
           covr::to_cobertura(cov)
         shell: Rscript {0}
 
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: ${{ github.event_name != 'pull_request' }}
-          file: ./cobertura.xml
-          plugin: noop
+          # v5 is a composite action (no Node runtime) and renamed the singular
+          # file/plugin inputs to their plural forms.
+          files: ./cobertura.xml
+          plugins: noop
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
