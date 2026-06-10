@@ -49,13 +49,19 @@ multivariate outliers by Mahalanobis distance. It is \strong{stricter} than
 \code{confidence = 0.99}, i.e. \code{alpha = 0.01}); pass \code{alpha = 0.01} to reproduce
 the \code{careless} default. Override the cutoff with \strong{one} of two mutually
 exclusive arguments: \code{alpha} (the chi-square tail probability) or \code{cutoff}
-(a literal threshold on D²).
+(a literal threshold on D²). The cutoff keeps \code{df = p} (the full item count)
+for \strong{every} respondent, including rows with missing items whose D²
+accumulates over fewer dimensions -- flagging is therefore conservative
+(lenient) for partial rows, matching \code{careless::mahad()}.
 
 \strong{Abstention.} A respondent who answered nothing (an all-\code{NA} row) abstains:
 both \code{value} and \code{flagged} are \code{NA}. If \strong{no} distance can be computed for
-anyone -- fewer than two respondents carry any data, or the covariance matrix
+anyone -- fewer than two respondents carry any data, the covariance matrix
 is singular (for example more items than respondents, or perfectly collinear
-items) -- every \code{value} is \code{NA}, a warning is emitted, and no one is flagged.
+items), or the pairwise covariance is \strong{indefinite} (under heavy or
+structured missingness the pairwise-estimated covariance can lose positive
+definiteness, making the distance signed and so invalid for every row) --
+every \code{value} is \code{NA}, a warning is emitted, and no one is flagged.
 }
 \section{What this catches}{
 

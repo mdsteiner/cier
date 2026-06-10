@@ -30,12 +30,13 @@ hand_fixture <- function() {
 }
 
 # Heavy-missingness fixture whose pairwise covariance is invertible but NOT
-# positive definite. Likert 1..5, 30 x 5, 40% MCAR; the seed was searched by
-# dev/find-indefinite-seed.R, which verifies: no all-NA row, solve() succeeds
-# with a finite inverse, chol() FAILS (a negative eigenvalue), and the unguarded
-# bilinear form yields at least one negative D^2.
+# positive definite. Likert 1..5, 30 x 5, 40% MCAR; seed 11 is the first seed in
+# 1:500 that dev/find-indefinite-seed.R verifies under the default RNG kinds (a
+# fresh session, as in testthat / CI): no all-NA row, solve() succeeds with a
+# finite inverse, chol() FAILS (min eigenvalue ~ -0.12), and the unguarded
+# bilinear form yields a negative D^2 on 16 rows.
 indefinite_fixture <- function() {
-  x <- withr::with_seed(2L, {
+  x <- withr::with_seed(11L, {
     m <- matrix(sample.int(5L, 30L * 5L, replace = TRUE), nrow = 30L)
     m[sample.int(length(m), 60L)] <- NA # 60 / 150 = 40% missing
     m

@@ -19,7 +19,7 @@
       Cross-index agreement (observed vs independence baseline):
         flagged by >= 1 vote: 74 / 300 (24.7%); expected 24.8%
         flagged by >= 2 votes: 5 / 300 (1.7%); expected 1.8%
-        flagged by >= 3 votes: 1 / 300 (0.3%); expected 0.0%  <- excess
+        flagged by >= 3 votes: 1 / 300 (0.3%); expected 0.0%
         flagged by >= 4 votes: 0 / 300 (0.0%); expected 0.0%
         flagged by >= 5 votes: 0 / 300 (0.0%); expected 0.0%
         flagged by >= 6 votes: 0 / 300 (0.0%); expected 0.0%
@@ -45,7 +45,7 @@
         cier_person_total          3 / 60 (5.0%)
       
       Cross-index agreement (observed vs independence baseline):
-        flagged by >= 1 vote: 6 / 60 (10.0%); expected 9.8%  <- excess
+        flagged by >= 1 vote: 6 / 60 (10.0%); expected 9.8%
         flagged by >= 2 votes: 0 / 60 (0.0%); expected 0.2%
         flagged by >= 3 votes: 0 / 60 (0.0%); expected 0.0%
         flagged by >= 4 votes: 0 / 60 (0.0%); expected 0.0%
