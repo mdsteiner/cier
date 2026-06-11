@@ -14,11 +14,14 @@ person-total (r_pbis), the nonparametric person-fit statistics Gnormed (`PerFit`
 and Ht (`mokken`), plus the classics longstring and IRV. **v0.2** (ADR-signed off
 2026-06-10) adds five published, cheap, oracle-able indices: `cier_autocorrelation`
 and `cier_lazr` (indirect pattern), `cier_total_time` and `cier_page_time` (new
-timing family), and `cier_attention` (new direct family). Nothing else. A further
+timing family), and `cier_attention` (new direct family). **v0.3** (ADR-signed
+off 2026-06-11) adds `cier_simulate()` -- a data generator (not an index: no
+registry row, never in `cier_screen()`) that plants known C/IER patterns for
+power analysis, method comparison, and recovery tests; it never headlines a
+real-world validity claim (role boundary in the ADR). Nothing else. A further
 method family (IRT person-fit, model-based, ML), a learned combiner (including the
-post-study `cier_recommended()` bundle support), simulation, spec-curve, or a
-report generator each needs an `ADR.md` entry + Markus's sign-off **before** any
-code.
+post-study `cier_recommended()` bundle support), spec-curve, or a report generator
+each needs an `ADR.md` entry + Markus's sign-off **before** any code.
 
 ## Anatomy of a method
 

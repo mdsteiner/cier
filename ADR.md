@@ -41,8 +41,159 @@ base R, documented in the vignette not shipped).
 
 Adding any further method family (IRT person-fit, model-based, machine-learning),
 a learned combiner (including the post-study `cier_recommended()` bundle support),
-a simulation engine, a specification-curve tool, or a report generator still
-requires a new entry here and explicit sign-off before code.
+a specification-curve tool, or a report generator still requires a new entry here
+and explicit sign-off before code. The simulation engine is signed off below (see
+"Scope boundary: v0.3 simulation engine").
+
+## Scope boundary: v0.3 simulation engine
+
+`cier_simulate()` is signed off (2026-06-11) as the v0.3 family: a **data
+generator**, not an index. It plants known C/IER patterns into survey data so the
+package and the bundle study can run power analyses, compare methods on *planted*
+patterns, build recovery / property tests, and replicate published simulation
+designs. It is a lean port of the validated archive asset
+(`archive/R/cier-simulate*.R`, `sim-*.R`), re-reviewed as new. The build is
+Slices 24-27 (attentive generator; pattern mutators + extent/onset + truth;
+timing + direct checks + orchestrator + print; docs + acceptance); this entry
+records the resolved decisions so those slices run tests-first with no open
+numerical question.
+
+**Role boundary (binding; restated in `@details` and the docs vignette).**
+`cier_simulate()` exists for (a) power analysis / study design, (b) method
+comparison on planted patterns, (c) package recovery / property tests, and (d)
+replicating published designs. It is **not** evidence of real-world validity.
+Simulated carelessness is more stylized than instructed carelessness, and the
+evidence is a standing warning: Schroeders et al. (2022) found a
+simulation-trained detector's advantage did not transfer to real data. Every
+accuracy headline in the package docs and the study therefore stays anchored to
+labeled real data (the `published-results` vignette; the study's anchors); no
+simulated number enters a per-context league table or a `cier_recommended()`
+weight.
+
+**No registry row, no cutoff, no screen membership.** A generator has no
+direction and no flag, so it never appears in the method-properties registry or
+in `cier_screen()`. Trust is **oracle-only** (like personal reliability): no CRAN
+package simulates C/IER with a planted truth (verified 2026-06-11 -- `careless`
+and `responsePatterns` ship only static pre-simulated datasets), so the checks
+are closed-form marginal-probability oracles for the attentive model,
+deterministic re-derivations for the patterned mutators, and paper-anchored pins
+through the *shipped* indices (see `tests/reference/TOLERANCES.md`). A simulator
+on which every index scores AUC 1.0 is wrong by construction; the timing and
+direct-check designs build in overlap so nothing separates perfectly.
+
+The resolved decisions (four deliberate deviations from the proposal in
+`dev/extension/simulate-plan.md` are marked **[*]**):
+
+- **Items contract.** Simulation requires `min` and `max` on **every** item (the
+  generator needs each item's full response range, unlike the index wrappers
+  where `max` is conditional on keying). A stricter `check_items_simulate` reuses
+  the `check_items` machinery; `scale` is required (it defines the factor
+  structure) and `min_scales = 1` (a single-scale simulation is legitimate).
+  Heterogeneous `min`/`max` across items are allowed (the per-item category count
+  is `max - min + 1`, output offset to `min..max`).
+- **Attentive model + default marginal shape.** Graded response model in the
+  factor-analytic parameterisation: default loadings 0.7 on the item's scale
+  factor, zero cross-loadings, identity factor correlations,
+  `trait_distribution` one of `normal` / `skew_normal` / `t` / `bimodal`. A
+  `marginals` argument (mutually exclusive with raw `thresholds`) sets the
+  per-item observed category distribution directly -- named presets (`uniform`,
+  `peaked`, `skewed_right` / `skewed_left` with a strength, `bimodal`) or explicit
+  probability vectors, per item or per scale -- converted **exactly** to GRM
+  thresholds via `tau_k = qnorm(cumsum(p))` (under normal traits the categorised
+  marginal is fully determined by the threshold quantiles, so the target pmf
+  doubles as a closed-form oracle). **[*]** The **default shape is `peaked`,
+  realised as a symmetric triangular pmf** (e.g. K = 5 gives `(1,2,3,2,1)/9`), not
+  the proposal's `uniform`: real Likert marginals are central-peaked far more
+  often than flat, and the triangular default is the realistic case while staying
+  an exact closed-form oracle. The shape is a performance-relevant design factor
+  (agreement-skewed marginals make attentive rows throw long modal runs;
+  midpoint-peaked marginals camouflage the `midpoint` pattern; restricted variance
+  degrades synonym / antonym pair discovery), so it is a sweepable knob the docs
+  vignette exercises.
+- **Bimodal mechanism. [*]** Both ship in v1 (the proposal shipped only the
+  marginal preset): a `bimodal` *marginal* preset reshapes each item under a
+  unimodal latent, and a `bimodal` *trait* distribution (two equal-weight normal
+  components, means +/-1 and component SD 0.5, standardised to unit variance;
+  `sep` and weights overridable) additionally makes extremeness correlate across
+  items -- two genuine camps. Under a non-normal trait the closed-form marginal
+  oracle no longer holds (already true for `skew_normal` / `t`), so those cells
+  are pinned by property checks (skew sign, tail weight, two-camp separation), not
+  the marginal-frequency oracle.
+- **Raw-orientation contract.** Reverse-keyed items load **negatively**; the
+  returned matrix is raw (as-clicked), the package-wide contract (indices
+  reverse-score internally from `items`). Restated as a tested invariant with a
+  sign-pinning check (forward vs reverse item correlations flip) -- the lesson of
+  the archive's reverse-keying bug.
+- **Pattern set.** `random`, `straightline` (+ `anchor`, `switch_prob`),
+  `midpoint`, `extreme`, `diagonal` (+ `bounce`), `alternating`, `markov`,
+  `speeder`. `markov` is **kept** (~80 lines; the matched generator for the
+  shipped `cier_lazr`, so its recovery is testable on its native pattern).
+  Straightline `anchor` defaults to **`position`**: it holds a relative position
+  `q` in `[0, 1]` mapped per item to `round(min + q * (max - min))`, so on a
+  heterogeneous battery the *number* changes at scale boundaries while the
+  respondent stays a pure straightliner (classic longstring breaks there by
+  construction, within-scale runs survive); it coincides with the classic
+  same-number `value` anchor on homogeneous batteries. `switch_prob` reflects the
+  position (`q -> 1 - q`). `midpoint` / `extreme` stay separate patterns (distinct
+  truth labels per Curran 2016) even though they are the `q = 0.5` / `q in {0, 1}`
+  special cases. Pattern weights are a named `patterns` list summing to 1.
+- **Extent / onset -- orthogonal to pattern. [*]** A redesign of the archive
+  (where `partial` was itself a pattern with a buried secondary): each careless
+  row draws pattern x extent independently. Extent is one of **`none`, `full`,
+  `partial`, `temporary`**; `prop_partial` and `prop_temporary` (both default 0,
+  so all careless rows are full) set the shares; `onset_window = round(c(0.3, 0.8)
+  * p)` samples the onset (consistent with Welz & Alfons 2023), and a
+  window-length sampler sets the `temporary` offset. The **temporary-carelessness
+  arm is IN** (the proposal deferred it): a `temporary` row is attentive, careless
+  in a bounded window `[onset, offset)`, then recovers -- the strictly more
+  general two-changepoint model (`full` = `[1, p]` and `partial` = `[k, p]` are
+  its degenerate windows), and the realistic transient-lapse case that makes
+  `cier_page_time`'s within-survey burst detection directly testable. Truth
+  carries **`onset_item` and `offset_item`** as the careless-span bounds (full
+  `[1, p]`, partial `[k, p]`, temporary `[k, m)`, attentive both `NA`). Content
+  mutation **and** the careless time shift are confined to the careless span.
+  Welz & Alfons's separate recovery-trajectory variant stays out for v1.
+- **Timing model + calibration. [*]** Lognormal per-item times with a
+  per-respondent pace intercept (`respondent_sd`, so attentive / careless
+  distributions overlap) and a careless mean shift; aggregated to `seconds`
+  (total) and `page_seconds` (+ `items_per_page`). The archive default
+  `mu_car = log(4)` (about 4 s/item) **never trips Bowling et al.'s (2023)
+  2 s/item page floor**, so its planted speeding was undetectable by the cited
+  page rule. The resolved defaults: `mu_att = log(8)`, `mu_car = log(1.5)`
+  (strictly below the 2 s/item floor), `sigma = 0.5`, `respondent_sd = 1.2`. These
+  are **held by an acceptance test, not asserted** (Slice 26): default careless
+  rows must be flaggable by `cier_page_time(min_seconds = 2)` **and** the
+  total-time rank-AUC must land inside the published .66-.92 band, never 1.0. A
+  `speeder` pattern has careless times but attentive content -- the content
+  indices must miss it and timing must catch it.
+- **Direct attention checks.** Optional check-item injection: careless rows fail
+  each check with `p_fail_careless = 0.75`, attentive rows with
+  `p_fail_attentive = 0.05` -- documented conventions, not estimates (no published
+  point estimates exist; the bracketing evidence -- Goldammer et al.'s bogus-item
+  AUC .66-.76, Bruhlmann et al.'s 92 / 394 bogus failures -- is cited in
+  `@details`). Probabilistic, so no perfect separation. Output is shaped as
+  `$checks` + `$pass` for `cier_attention()`.
+- **Return schema + print. [*]** A light list-based S3 `cier_sim`: `$responses`
+  (n x p raw integer matrix), `$items`, `$seconds`, `$page_seconds` +
+  `$items_per_page`, `$checks` + `$pass`, `$truth`; generator metadata (loadings,
+  thresholds, RT parameters, seed) as attributes. The **truth** frame is
+  `careless` (logical), `pattern` (character, `attentive` for clean rows),
+  `extent`, `onset_item`, `offset_item`, `speeded` (logical) **plus a per-row
+  params-record column** (the proposal floated dropping it; it is kept for full
+  generative provenance). `seed` applies locally (save / restore `.Random.seed`,
+  the `kernel_rpr` / `perfit_null` house pattern) -- same seed gives
+  bytewise-identical output. The print method is a Slice 26 design-first
+  deliverable (text mock-up -> approval -> snapshot), not specified here.
+
+**Cut / deferred (each needs a fresh sign-off to return).** *Cut:* the `mixed`
+per-cell / per-row mutator (within-row pattern mosaics have no published
+precedent in the design taxonomy; cross-respondent mixtures come free from the
+pattern weights); the `scenario` convenience flags and the
+`cier_simdata` / `cier_items` object integration (the lean package is
+function-first -- the return value is a plain list shaped for the wrappers).
+*Deferred:* the missingness engine -- v1 emits complete data, and the indices' NA
+paths are already pinned by their own edge tests; revisit only if the study needs
+planted-missingness cells.
 
 ## v0.2 index additions: families, cutoffs, deviations
 

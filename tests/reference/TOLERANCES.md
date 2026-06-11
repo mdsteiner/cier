@@ -184,6 +184,38 @@ close. cier ships the **parameter-free** elbow (no sensitivity `S`, no smoothing
 — the raw sorted scores); the study evaluates the full sensitivity-parameterised
 algorithm study-side.
 
+## v0.3 simulator (stubs -- the test rows land with Slices 24-26)
+
+`cier_simulate()` is a generator, not an index; trust is **oracle-only** (no CRAN
+package simulates C/IER with a planted truth -- verified 2026-06-11). The rows
+below register the contract ahead of implementation; the active rows + tests
+arrive with each slice (24 attentive; 25 mutators / extent / truth; 26 timing /
+direct / orchestrator). Exact tolerances are finalized at each slice's
+tests-first sign-off and recorded here then. Closed-form oracles and
+paper-anchored pins through the *shipped* indices replace a cross-package partner.
+
+| Quantity | Target tolerance | Reference |
+|---|---:|---|
+| GRM attentive: large-n category frequencies vs target pmf (triangular default; any `marginals` preset) under normal traits | recorded at Slice 24 (seeded, large-n abs-frequency band) | `ref-sim-attentive-grm.R` |
+| GRM categorisation: fixed-eta categories vs hand-rolled `findInterval` re-derivation | 0 (exact) | `ref-sim-attentive-grm.R` |
+| Non-normal trait property checks (skew sign, t tails, bimodal two-camp separation) | property (not a closed-form marginal) | `ref-sim-attentive-grm.R` |
+| Patterned mutators (random / straightline + anchor + switch_prob / midpoint / extreme / diagonal + bounce / alternating / markov / speeder): deterministic per-mutator re-derivation | 0 (exact integer) | `ref-sim-patterns.R` |
+| Biemann footnote-2 bounce `c(1,2,3,4,5,4,3,2,1,2)` (p=10, K=5, start 1) gives `cier_lazr` = 2/3; cyclic diagonal gives `cier_lazr` = 1 | 1e-12 (obs ~1e-16) | shipped `cier_lazr` |
+| value-anchored straightliner gives `cier_longstring` = p; positional straightliner run breaks at the scale boundary on a mixed-format battery | 0 (exact) | shipped `cier_longstring` |
+| alternating at period d gives max abs-lag autocorrelation = 1 at lag d | 1e-10 | shipped `cier_autocorrelation` |
+| extent bookkeeping: attentive prefix / suffix byte-identical to the pre-mutation matrix (full / partial / temporary spans) | 0 (`expect_identical`) | `ref-sim-patterns.R` |
+| seed reproducibility: same seed gives bytewise-identical `$responses` / `$seconds` / `$truth`; frozen-seed RNG-stream digest | 0 (`expect_identical`) | self / digest fixture |
+| timing acceptance: default careless rows page-flaggable AND total-time rank-AUC in [.66, .92] | band (not a point tolerance) | self |
+| direct injection: large-n careless / attentive failure rates vs `p_fail` (0.75 / 0.05) | statistical (seeded, large-n) | self |
+| per-pattern recovery: matched-index rank-AUC at or above a recorded per-pattern floor (small n) | floor | self |
+
+The deterministic and paper-anchored rows (categorisation, mutators, the
+`cier_lazr` / `cier_longstring` / `cier_autocorrelation` pins, extent bookkeeping,
+seed reproducibility) and the small-n recovery floors run in the **fast tier**.
+The distribution-level checks that need large n (the GRM marginal-frequency
+oracle, the timing AUC band, the direct-injection rate check) run **slow tier**
+(`skip_if_slow()`).
+
 ## Slice 12 — `cier_screen()` combiner
 
 The screen is an orchestrator, not a statistic, so it has **no cross-package
