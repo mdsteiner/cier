@@ -137,6 +137,7 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 | autocorrelation | per-row max abs lag autocorrelation vs hand-rolled lagged-`cor()` oracle | 1e-10 | `ref-autocorrelation-gottfried2022.R` |
 | autocorrelation | vs `responsePatterns::rp.acors()` on complete data (`na_rm = FALSE`) | 1e-10 | `responsePatterns` (0.1.1) |
 | lazr | per-row Laz.R (Eq. 3) vs hand-rolled oracle; footnote-2 `Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3`, John worked example 33/49, straightliner / diagonal-liner = 1.0 | 1e-12 (obs ~1e-16) | `ref-lazr-biemann2025.R` |
+| lazr | Kneedle elbow cutoff (`kneedle = TRUE`) vs the Satopaa et al. (2011) parameter-free re-derivation; hand-computed elbow `kneedle_knee(c(0,0,0,0,1,2,5,9)) = 2` | 0 (exact, byte-identical float ops) | `ref-kneedle-satopaa-2011.R` |
 | total_time | per-respondent value = validated seconds vector (identity, NA-preserving) vs `ref_total_time` | 0 (exact, `expect_identical`) | `ref-total-time.R` |
 | total_time | percentile-lower cutoff vs `stats::quantile(finite, fpr, type = 7)` | 1e-12 (obs 0) | base R / `ref-total-time.R` |
 | total_time | median-relative cutoff vs `frac_median * stats::median(finite)` | 1e-12 (obs 0) | base R / `ref-total-time.R` |
@@ -171,6 +172,17 @@ leaves the value unchanged; non-integer responses are rejected upstream by the
 wrapper, not scored). These are deliberate deviations from Biemann et al.'s
 footnote-2 reference code (which adds NA as a Markov state via `useNA = "ifany"`)
 and are recorded in `ADR.md` ("Laz.R missing-data convention").
+
+Laz.R's optional **Kneedle elbow** cutoff (`kneedle = TRUE`, the sample-specific
+cutoff Biemann et al. recommend in their companion app) is also oracle-only: the
+only R implementation of Kneedle (`etam4260/kneedle`) is GitHub-only and cannot
+be a CRAN `Suggests`, so the parity check is the hand-rolled Satopaa et al. (2011)
+re-derivation (`ref-kneedle-satopaa-2011.R`) at tolerance **0** — cier's kernel
+and the oracle perform byte-identical float operations (sort, normalise,
+`which.min` of the diagonal deviation), so the knee value is exact, not merely
+close. cier ships the **parameter-free** elbow (no sensitivity `S`, no smoothing
+— the raw sorted scores); the study evaluates the full sensitivity-parameterised
+algorithm study-side.
 
 ## Slice 12 — `cier_screen()` combiner
 

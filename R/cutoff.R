@@ -67,6 +67,54 @@ resolve_median_cutoff <- function(value, frac, call = rlang::caller_env()) {
   frac * stats::median(finite)
 }
 
+# Pure parameter-free Kneedle elbow (Satopaa, Albrecht, Irwin & Raghavan 2011)
+# for a convex, increasing curve -- the right-skewed C/IER index distribution,
+# where a moderate bulk gives way to a high-scoring careless tail. The knee is
+# the point of greatest distance BELOW the line joining the sorted curve's
+# endpoints: sort the values ascending, normalise both axes to [0, 1], and take
+# the value where `y_norm - x_norm` is most negative (the argmin). `values` must
+# be finite, length >= 3, and non-constant -- resolve_kneedle_cutoff() guarantees
+# this, so the kernel does no input checking. There is no sensitivity parameter
+# and no smoothing (the raw sorted scores), so it is byte-identical to the
+# independent oracle (tests/reference/ref-kneedle-satopaa-2011.R) at tolerance 0.
+kneedle_knee <- function(values) {
+  sorted <- sort(values)
+  n <- length(sorted)
+  x_norm <- (seq_len(n) - 1L) / (n - 1L)
+  y_norm <- (sorted - sorted[[1L]]) / (sorted[[n]] - sorted[[1L]])
+  sorted[[which.min(y_norm - x_norm)]]
+}
+
+# Kneedle elbow cutoff for the upper-tail Laz.R index (cier_lazr, kneedle = TRUE):
+# the sample-specific cutoff Biemann et al. (2025) recommend in their companion
+# app -- the parameter-free Satopaa et al. (2011) elbow of the sorted scores.
+# Drops non-finite values first, then abstains -- NA plus the shared
+# cier_warning_insufficient_items, so an abstaining cutoff flags nobody -- when
+# fewer than three finite values remain OR they are all equal (a knee is
+# undefined on a degenerate distribution; the signed-off deviation from the
+# archived version, which returned the constant value). Like resolve_median_cutoff
+# this is an OVERRIDE resolver (data-driven, dispatched inline by the wrapper and
+# passed to resolve_index_cutoff() as the cutoff), not a registry default routed
+# through resolve_cutoff(). It computes the upper-tail elbow only -- the sole
+# wired use (cier_lazr is upper); the help page documents the convention.
+resolve_kneedle_cutoff <- function(value, call = rlang::caller_env()) {
+  finite <- value[is.finite(value)]
+  # `||` short-circuits, so min/max are never taken on a < 3-length vector; for
+  # length >= 3, `min == max` is the all-equal test and also states kneedle_knee's
+  # precondition that its `max - min` denominator is non-zero.
+  if (length(finite) < 3L || min(finite) == max(finite)) {
+    cier_warn(
+      "cier_warning_insufficient_items",
+      c("Cannot resolve a Kneedle cutoff: fewer than three finite scores, or \\
+         all scores equal -- the sorted curve has no knee.",
+        "i" = "Returning {.val NA} as the cutoff."),
+      data = list(n_used = length(finite)), call = call
+    )
+    return(NA_real_)
+  }
+  kneedle_knee(finite)
+}
+
 # Resolve a fixed cutoff. With `n_items` supplied the value is a fraction of the
 # item count (`ceiling(value * n_items)`); without it the value is a literal
 # threshold on the score and passes through verbatim. The two modes have

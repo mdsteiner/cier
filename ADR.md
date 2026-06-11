@@ -63,11 +63,19 @@ deviations from the source papers and the archived previous version:
   source is PARE 27(2), `10.7275/vyxb-gt24`.
 - **Autocorrelation cutoff.** Empirical upper percentile -- this is the paper's
   *own* relative-ranking recommendation, so it is **not** a divergence.
-- **Laz.R cutoff.** Empirical upper percentile, a **deliberate divergence** from
-  Biemann et al.'s sample-specific Kneedle elbow: it is consistent with cier's
-  single-`fpr`-knob ranking convention, and the score's documented
-  sequence-length dependence makes an absolute cutoff indefensible. The study
-  separately evaluates a paper-faithful Kneedle variant; the package may adapt.
+- **Laz.R cutoff (revised 2026-06-11).** The **default** is the empirical upper
+  percentile (`fpr = 0.05`) -- which is also what Biemann et al.'s own empirical
+  studies use (they flag the top 5% of Laz.R scores; the Kneedle elbow is offered
+  separately in their companion R Shiny app). It is consistent with cier's
+  single-`fpr`-knob ranking convention, and the score's documented sequence-length
+  dependence makes an absolute cutoff hard to transport. The **paper-faithful
+  Kneedle elbow** (Satopaa et al. 2011) is now also selectable as an opt-in
+  override, `kneedle = TRUE` on the wrapper (see "Cutoff overrides" below): the
+  study needs it for the first labeled evaluation of Laz.R, and shipping it lets
+  the package adapt the default later if the study warrants. The registry default
+  stays `percentile`; Kneedle is a wrapper override, not the registry default, and
+  it is wired on `cier_lazr` only (autocorrelation keeps the percentile, which is
+  *its* paper's own relative-ranking recommendation).
 - **Laz.R missing-data convention (resolved 2026-06-10 at the wrapper sign-off).**
   `cier_lazr` **drops NA transitions**: a transition is counted only when both
   endpoints are present, the denominator is the count of valid transitions (not
@@ -419,6 +427,29 @@ generalisation of `assert_single_override()`: it takes a named list of the knob
 values and aborts naming exactly the pair or triple supplied. The two-argument
 `assert_single_override()` stays in use for the two-knob indices; the n-way form
 is reached for only when an index exposes more than two ways to set its cutoff.
+
+`cier_lazr` likewise has **three** knobs guarded by `assert_single_cutoff()`: the
+rate `fpr`, a literal `cutoff`, and the **Kneedle elbow** `kneedle = TRUE` (a
+logical switch -- it carries no value, so the wrapper enters it into the knob list
+only when `TRUE`). Like `frac_median`, Kneedle is a **data-driven override
+resolver** (`resolve_kneedle_cutoff()` in `cutoff.R`), dispatched inline by the
+wrapper and passed to `resolve_index_cutoff()` as the cutoff -- *not* a registry
+default routed through `resolve_cutoff()`, so the "every rate-based **default**
+resolves through `resolve_cutoff`" rule is unaffected. The resolver drops
+non-finite values, then abstains (`NA` + `cier_warning_insufficient_items`, so it
+flags nobody) when fewer than three finite scores remain or they are all equal --
+a knee is undefined on a degenerate distribution. This is a **deliberate deviation
+from the archived version**, which returned the constant value on the all-equal
+case (flagging everyone). The math is the pure `kneedle_knee()` (single-kernel
+rule): the parameter-free Satopaa et al. (2011) elbow -- the point of greatest
+distance below the chord joining the sorted-score curve's endpoints, `argmin(y -
+x)` on the normalised curve -- with **no sensitivity parameter and no smoothing**
+(a deliberate simplification of the full algorithm; the study evaluates the
+sensitivity-parameterised form study-side). It is **oracle-only** trust at
+tolerance 0 (byte-identical float ops vs the independent Satopaa re-derivation):
+the only R Kneedle implementation (`etam4260/kneedle`) is GitHub-only and cannot
+be a CRAN `Suggests`. The kernel computes the **upper-tail** elbow only, the sole
+wired use (`cier_lazr` is upper).
 
 ## Method-properties registry schema
 

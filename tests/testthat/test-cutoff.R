@@ -149,3 +149,99 @@ test_that("apply_flag rejects an invalid direction (silent tail inversion guard)
   expect_error(apply_flag(c(1, 2), cutoff = 1, direction = "sideways"),
                class = "cier_error_input")
 })
+
+# ---- kneedle: the paper-faithful Laz.R cutoff (Satopaa et al. 2011) ----------
+# The independent oracle (ref_kneedle) re-derives the parameter-free elbow and
+# never calls the production kernel; oracle-only trust, tolerance 0 (kernel and
+# oracle do byte-identical float ops). cier ships only the convex + increasing
+# case (high Laz.R = careless = upper tail). See tests/reference/TOLERANCES.md.
+
+source(test_path("..", "reference", "ref-kneedle-satopaa-2011.R"))
+
+test_that("kneedle_knee equals a hand-computed elbow (independent of the oracle)", {
+  # Sorted v = c(0, 0, 0, 0, 1, 2, 5, 9), n = 8. x = (0:7)/7; y = v / 9. The
+  # deviations y - x are 0, -.143, -.286, -.429, -.460, -.492, -.302, 0, so the
+  # most-negative (the convex knee) is index 6 -> value 2. Computed by hand, so a
+  # mutant that drifts the normalisation, the argmin, or the sort fails here even
+  # if it still happens to match the oracle.
+  expect_identical(kneedle_knee(c(9, 0, 5, 0, 2, 0, 1, 0)), 2)   # unsorted input
+})
+
+test_that("kneedle_knee matches the oracle byte-for-byte on a right-skewed sample", {
+  vals <- withr::with_seed(20260611L, sort(rexp(80L, rate = 4)))
+  expect_identical(kneedle_knee(vals),
+                   ref_kneedle(vals, "convex", "increasing")$value)
+})
+
+test_that("kneedle_knee matches the oracle on a smooth convex curve (x^2)", {
+  vals <- (seq(0, 1, length.out = 500L))^2
+  expect_identical(kneedle_knee(vals),
+                   ref_kneedle(vals, "convex", "increasing")$value)
+  # Analytic elbow of y = x^2 on [0, 1] sits at x = 0.5 -> value 0.25.
+  expect_lt(abs(kneedle_knee(vals) - 0.25), 0.01)
+})
+
+test_that("kneedle_knee lands at the bulk/tail boundary, not in the bulk or tail", {
+  # A gentle moderate bulk (40 values 0.30..0.34) then a sharp careless spike
+  # (10 values 0.90..1.00). The convex elbow sits at the top of the bulk / start
+  # of the gap -- at or above every bulk value and strictly below the spike -- so
+  # flagging at/above it isolates the careless cluster, never the whole bulk and
+  # never nobody. The knee equals max(bulk) exactly here (verified), so pin
+  # `>=` not `>`; an argmax / inverted-elbow mutant lands at min(bulk) and fails.
+  bulk <- seq(0.30, 0.34, length.out = 40L)
+  tail <- seq(0.90, 1.00, length.out = 10L)
+  knee <- kneedle_knee(c(bulk, tail))
+  expect_gte(knee, max(bulk))                            # at/above the bulk
+  expect_lt(knee, min(tail))                             # strictly below the spike
+})
+
+test_that("kneedle_knee pins the (i-1)/(n-1) normalisation (off-by-one guard)", {
+  # A convex increasing curve with an INTERIOR elbow at index 4 -> value 4.591
+  # (verified in R). The (i-1)/n off-by-one moves the argmin to the left endpoint
+  # (2.287) and the concave/argmax mutant gives 3.484, so this fixture kills the
+  # normalisation off-by-one that every smooth / right-skewed parity fixture
+  # happens to be degenerate against. (The i/(n-1) variant is a uniform shift of
+  # the x-axis: it can never change the argmin, so it is an equivalent mutant
+  # that needs no fixture.)
+  v <- c(2.287, 3.484, 4.178, 4.591, 5.561, 6.509, 7.257)
+  expect_identical(kneedle_knee(v), ref_kneedle(v, "convex", "increasing")$value)
+  expect_identical(kneedle_knee(v), 4.591)
+})
+
+test_that("resolve_kneedle_cutoff drops non-finite values, then matches the kernel", {
+  value <- c(NA_real_, 0.1, 0.2, NaN, 0.3, 0.4, Inf, 0.5, 0.95)
+  finite <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.95)
+  expect_identical(resolve_kneedle_cutoff(value), kneedle_knee(finite))
+})
+
+test_that("resolve_kneedle_cutoff abstains (NA + warning) below three finite values", {
+  expect_warning(res <- resolve_kneedle_cutoff(c(0.4, 0.9, NA, Inf)),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res, NA_real_)
+  expect_warning(resolve_kneedle_cutoff(rep(NA_real_, 5L)),
+                 class = "cier_warning_insufficient_items")
+})
+
+test_that("resolve_kneedle_cutoff abstains on a constant distribution (no knee)", {
+  # The signed-off deviation from the archive (which returned the constant value,
+  # flagging everyone): a knee is undefined on a degenerate distribution, so the
+  # cutoff abstains and flags nobody.
+  expect_warning(res <- resolve_kneedle_cutoff(rep(0.42, 50L)),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res, NA_real_)
+})
+
+test_that("resolve_kneedle_cutoff is deterministic (no RNG, no jitter)", {
+  vals <- withr::with_seed(11L, sort(rexp(60L)))
+  expect_identical(resolve_kneedle_cutoff(vals), resolve_kneedle_cutoff(vals))
+})
+
+test_that("the kneedle elbow differs from the fpr=0.05 percentile (a distinct rule)", {
+  # A 40-point bulk at 0.30 then a graded 20-point ramp 0.50..1.00. The elbow
+  # sits at the bulk/ramp boundary (~0.3-0.5); the 95th percentile sits high in
+  # the ramp (~0.92). They are different cutoff rules, so a mutant that aliases
+  # kneedle to the percentile cannot survive: the elbow is strictly the lower.
+  v <- c(rep(0.30, 40L), seq(0.50, 1.00, length.out = 20L))
+  expect_lt(resolve_kneedle_cutoff(v),
+            resolve_cutoff(v, "upper", fpr = 0.05))
+})

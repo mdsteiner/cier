@@ -8,7 +8,9 @@
 #     the one-liner Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3, straightliner = 1.
 #   - Oracle-only trust (no CRAN partner); see tests/reference/TOLERANCES.md.
 #   - The cutoff routes through the single resolve_index_cutoff() path
-#     (percentile method, upper direction, fpr = 0.05 by default).
+#     (percentile method, upper direction, fpr = 0.05 by default). Two overrides
+#     bypass the percentile default with an explicit cutoff: a literal `cutoff`,
+#     and the paper-faithful Kneedle elbow (`kneedle = TRUE`, resolve_kneedle_cutoff).
 
 #' Laz.R first-order Markov predictability C/IER index
 #'
@@ -29,12 +31,28 @@
 #' @details
 #' **Cutoff.** The default flags the most predictable respondents: the cutoff is
 #' the empirical upper `fpr` quantile of the observed scores (the 95th percentile
-#' by default). This is a deliberate divergence from Biemann et al.'s
-#' sample-specific Kneedle elbow -- it follows cier's single-`fpr`-knob ranking
-#' convention, and the Laz.R score's documented dependence on sequence length
-#' makes an absolute cutoff indefensible. Adjust the target tail with `fpr`, or
-#' pass an absolute `cutoff` in `[0, 1]` to flag on a literal Laz.R magnitude;
-#' `fpr` and `cutoff` are mutually exclusive.
+#' by default) -- the convention Biemann et al.'s own studies use, where they
+#' flag the top 5%. This is cier's single-`fpr`-knob **ranking** convention, not
+#' a calibrated false-positive rate. Override it with **one** of three mutually
+#' exclusive arguments:
+#' - `fpr`, a different target upper-tail mass for the percentile;
+#' - `kneedle = TRUE`, the sample-specific **Kneedle elbow** (Satopaa et al.,
+#'   2011) Biemann et al. recommend in their companion app: it places the cutoff
+#'   at the knee of the sorted-score curve -- the point of greatest distance from
+#'   the line joining the curve's endpoints -- so the flagged share is read from
+#'   the data rather than fixed in advance. cier uses the parameter-free elbow
+#'   (no sensitivity tuning, no smoothing) and it abstains (`NA` cutoff, with a
+#'   warning) when fewer than three finite scores remain, or all scores are
+#'   equal, leaving no knee to find;
+#' - `cutoff`, a literal threshold on the Laz.R score in `[0, 1]`.
+#'
+#' Respondents whose score is at or above the resolved cutoff are flagged. The
+#' Laz.R score's documented dependence on sequence length (Biemann et al. 2025,
+#' Table 1) makes an absolute cutoff hard to transport across surveys, so both
+#' the percentile and the Kneedle elbow are within-sample ranking rules. The
+#' Kneedle elbow assumes a right-skewed distribution with a genuine knee (a
+#' careless tail); on a near-uniform distribution with no clear elbow it can flag
+#' a large and unstable share of respondents, so prefer the percentile there.
 #'
 #' **Integer anchors.** Laz.R scores a first-order Markov chain over discrete
 #' response anchors, so responses must be integer-coded; non-integer (averaged or
@@ -74,10 +92,14 @@
 #' @param fpr Optional target false-positive tail mass for the percentile cutoff.
 #'   `NULL` (default) uses the registry default `0.05`. A finite number in the
 #'   open interval `(0, 1)`; the cutoff is that upper-tail quantile of the
-#'   observed scores. Mutually exclusive with `cutoff`.
+#'   observed scores. Mutually exclusive with `cutoff` and `kneedle`.
 #' @param cutoff Optional **literal** cutoff on the Laz.R score, supplied instead
 #'   of `fpr`. A single finite number in `[0, 1]`; respondents whose score is at
-#'   or above it are flagged.
+#'   or above it are flagged. Mutually exclusive with `fpr` and `kneedle`.
+#' @param kneedle Logical; default `FALSE`. When `TRUE` the cutoff is the
+#'   sample-specific **Kneedle elbow** (Satopaa et al., 2011) of the sorted
+#'   scores instead of the `fpr` percentile -- the paper-faithful, instrument-free
+#'   cutoff Biemann et al. recommend. Mutually exclusive with `fpr` and `cutoff`.
 #'
 #' @return A `cier_index`: a list with per-respondent `value` (numeric, `NA` on
 #'   abstention) and `flagged` (logical) vectors plus the `method`, `cutoff`, and
@@ -90,6 +112,10 @@
 #' *Organizational Research Methods*, 28(4), 543-568.
 #' \doi{10.1177/10944281251334778}
 #'
+#' Satopaa, V., Albrecht, J., Irwin, D., & Raghavan, B. (2011). Finding a
+#' "kneedle" in a haystack: Detecting knee points in system behavior. *2011 31st
+#' International Conference on Distributed Computing Systems Workshops*, 166-171.
+#'
 #' @seealso [cier_autocorrelation()], [cier_longstring()]
 #' @family indirect indices
 #' @export
@@ -98,14 +124,30 @@
 #' out <- cier_lazr(bfi_careless[, 1:44])
 #' out
 #' head(as.data.frame(out))
-cier_lazr <- function(responses, fpr = NULL, cutoff = NULL) {
+cier_lazr <- function(responses, fpr = NULL, cutoff = NULL, kneedle = FALSE) {
   call <- rlang::caller_env()
   responses <- check_responses(responses, call = call)
   check_integer_responses(responses, call = call)
-  # `value` is a Laz.R magnitude in (~1/s, 1]; `fpr` is a tail mass in (0, 1), a
-  # literal `cutoff` a magnitude in [0, 1]; they are mutually exclusive.
-  check_percentile_overrides(fpr, cutoff, lower = 0, upper = 1, call = call)
+  check_flag(kneedle, "kneedle", call = call)
+  use_kneedle <- isTRUE(kneedle)
+  # Three mutually-exclusive cutoff knobs: the percentile `fpr` (a tail mass in
+  # (0, 1)), the paper-faithful Kneedle elbow (`kneedle = TRUE`), and a literal
+  # `cutoff` (a Laz.R magnitude in [0, 1]). Validate each, then reject any pair.
+  if (!is.null(fpr)) check_open_unit(fpr, "fpr", call = call)
+  if (!is.null(cutoff)) check_number(cutoff, "cutoff", lower = 0, upper = 1, call = call)
+  knobs <- list(fpr = fpr, cutoff = cutoff,
+                kneedle = if (use_kneedle) TRUE else NULL)
+  assert_single_cutoff(knobs, call = call)
   row <- cier_method_row("cier_lazr")
   value <- kernel_lazr(responses)
-  resolve_index_cutoff(value, row, fpr, cutoff, call = call)
+  # A literal `cutoff`, or the resolved Kneedle elbow, is an explicit override;
+  # otherwise (`NULL`) the shared percentile tail resolves the `fpr` default.
+  override <- if (!is.null(cutoff)) {
+    cutoff
+  } else if (use_kneedle) {
+    resolve_kneedle_cutoff(value, call = call)
+  } else {
+    NULL
+  }
+  resolve_index_cutoff(value, row, fpr, override, call = call)
 }

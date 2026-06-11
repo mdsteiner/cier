@@ -4,7 +4,7 @@
 \alias{cier_lazr}
 \title{Laz.R first-order Markov predictability C/IER index}
 \usage{
-cier_lazr(responses, fpr = NULL, cutoff = NULL)
+cier_lazr(responses, fpr = NULL, cutoff = NULL, kneedle = FALSE)
 }
 \arguments{
 \item{responses}{A numeric matrix (or a data.frame / tibble coerced
@@ -14,11 +14,16 @@ column per item, in administration order. \code{NA} marks a missing response.}
 \item{fpr}{Optional target false-positive tail mass for the percentile cutoff.
 \code{NULL} (default) uses the registry default \code{0.05}. A finite number in the
 open interval \verb{(0, 1)}; the cutoff is that upper-tail quantile of the
-observed scores. Mutually exclusive with \code{cutoff}.}
+observed scores. Mutually exclusive with \code{cutoff} and \code{kneedle}.}
 
 \item{cutoff}{Optional \strong{literal} cutoff on the Laz.R score, supplied instead
 of \code{fpr}. A single finite number in \verb{[0, 1]}; respondents whose score is at
-or above it are flagged.}
+or above it are flagged. Mutually exclusive with \code{fpr} and \code{kneedle}.}
+
+\item{kneedle}{Logical; default \code{FALSE}. When \code{TRUE} the cutoff is the
+sample-specific \strong{Kneedle elbow} (Satopaa et al., 2011) of the sorted
+scores instead of the \code{fpr} percentile -- the paper-faithful, instrument-free
+cutoff Biemann et al. recommend. Mutually exclusive with \code{fpr} and \code{cutoff}.}
 }
 \value{
 A \code{cier_index}: a list with per-respondent \code{value} (numeric, \code{NA} on
@@ -44,12 +49,30 @@ no scale blocking.
 \details{
 \strong{Cutoff.} The default flags the most predictable respondents: the cutoff is
 the empirical upper \code{fpr} quantile of the observed scores (the 95th percentile
-by default). This is a deliberate divergence from Biemann et al.'s
-sample-specific Kneedle elbow -- it follows cier's single-\code{fpr}-knob ranking
-convention, and the Laz.R score's documented dependence on sequence length
-makes an absolute cutoff indefensible. Adjust the target tail with \code{fpr}, or
-pass an absolute \code{cutoff} in \verb{[0, 1]} to flag on a literal Laz.R magnitude;
-\code{fpr} and \code{cutoff} are mutually exclusive.
+by default) -- the convention Biemann et al.'s own studies use, where they
+flag the top 5\%. This is cier's single-\code{fpr}-knob \strong{ranking} convention, not
+a calibrated false-positive rate. Override it with \strong{one} of three mutually
+exclusive arguments:
+\itemize{
+\item \code{fpr}, a different target upper-tail mass for the percentile;
+\item \code{kneedle = TRUE}, the sample-specific \strong{Kneedle elbow} (Satopaa et al.,
+2011) Biemann et al. recommend in their companion app: it places the cutoff
+at the knee of the sorted-score curve -- the point of greatest distance from
+the line joining the curve's endpoints -- so the flagged share is read from
+the data rather than fixed in advance. cier uses the parameter-free elbow
+(no sensitivity tuning, no smoothing) and it abstains (\code{NA} cutoff, with a
+warning) when fewer than three finite scores remain, or all scores are
+equal, leaving no knee to find;
+\item \code{cutoff}, a literal threshold on the Laz.R score in \verb{[0, 1]}.
+}
+
+Respondents whose score is at or above the resolved cutoff are flagged. The
+Laz.R score's documented dependence on sequence length (Biemann et al. 2025,
+Table 1) makes an absolute cutoff hard to transport across surveys, so both
+the percentile and the Kneedle elbow are within-sample ranking rules. The
+Kneedle elbow assumes a right-skewed distribution with a genuine knee (a
+careless tail); on a near-uniform distribution with no clear elbow it can flag
+a large and unstable share of respondents, so prefer the percentile there.
 
 \strong{Integer anchors.} Laz.R scores a first-order Markov chain over discrete
 response anchors, so responses must be integer-coded; non-integer (averaged or
@@ -96,6 +119,10 @@ Biemann, T., Koch-Bayram, I. F., Meier-Barthold, M., & Aguinis, H. (2025).
 Using Markov chains to detect careless responding in survey research.
 \emph{Organizational Research Methods}, 28(4), 543-568.
 \doi{10.1177/10944281251334778}
+
+Satopaa, V., Albrecht, J., Irwin, D., & Raghavan, B. (2011). Finding a
+"kneedle" in a haystack: Detecting knee points in system behavior. \emph{2011 31st
+International Conference on Distributed Computing Systems Workshops}, 166-171.
 }
 \seealso{
 \code{\link[=cier_autocorrelation]{cier_autocorrelation()}}, \code{\link[=cier_longstring]{cier_longstring()}}

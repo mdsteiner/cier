@@ -287,6 +287,76 @@ test_that("a literal cutoff passes through and flags via the upper direction", {
   expect_identical(out$flagged, !is.na(out$value) & out$value >= 0.95)
 })
 
+# ---- Cutoff: the paper-faithful Kneedle elbow (kneedle = TRUE) --------------
+# Biemann et al.'s own studies flag the top 5% (= the fpr default); the Kneedle
+# elbow (Satopaa et al. 2011) is the sample-specific cutoff they offer in their
+# companion app. cier ships it as an opt-in `kneedle = TRUE`, oracle-only trust.
+
+source(test_path("..", "reference", "ref-kneedle-satopaa-2011.R"))
+
+test_that("kneedle = TRUE sets the cutoff to the Satopaa elbow (oracle, tol 0)", {
+  x <- lazr_fixture(n = 70L, p = 18L)
+  out <- cier_lazr(x, kneedle = TRUE)
+  # End-to-end paper-faithfulness: the cutoff IS the convex/increasing elbow of
+  # the observed scores. The oracle drops the NA-abstaining rows, as the resolver
+  # does. This also proves kneedle is not aliased to the percentile default.
+  expect_identical(out$cutoff,
+                   ref_kneedle(out$value, "convex", "increasing")$value)
+  expect_identical(out$direction, "upper")
+  expect_s3_class(out, "cier_index")
+})
+
+test_that("kneedle = TRUE flags the predictable high tail, not the bulk", {
+  # Five straightliners (Laz.R = 1) on top of a careful bulk: the elbow sits at
+  # the bulk/spike boundary, so every straightliner flags while the least
+  # predictable respondent does not.
+  # Five constant rows (each a straightliner -> Laz.R = 1) over a careful bulk.
+  x <- rbind(matrix(c(2, 4, 1, 5, 3), nrow = 5L, ncol = 18L),
+             lazr_fixture(n = 35L, p = 18L))
+  storage.mode(x) <- "double"
+  out <- cier_lazr(x, kneedle = TRUE)
+  expect_true(all(out$flagged[1:5]))                       # the spike flags
+  expect_false(out$flagged[[which.min(out$value)]])        # the bulk floor does not
+  expect_false(all(out$flagged))                           # a tail, not everyone
+})
+
+test_that("kneedle = TRUE is deterministic (no RNG)", {
+  x <- lazr_fixture(n = 50L, p = 16L)
+  expect_identical(cier_lazr(x, kneedle = TRUE)$cutoff,
+                   cier_lazr(x, kneedle = TRUE)$cutoff)
+})
+
+test_that("kneedle is mutually exclusive with fpr and with cutoff", {
+  x <- lazr_fixture(n = 12L)
+  expect_error(cier_lazr(x, kneedle = TRUE, fpr = 0.1),
+               class = "cier_error_input")
+  expect_error(cier_lazr(x, kneedle = TRUE, cutoff = 0.5),
+               class = "cier_error_input")
+})
+
+test_that("a non-flag kneedle argument is a typed input error", {
+  x <- lazr_fixture(n = 12L)
+  expect_error(cier_lazr(x, kneedle = "yes"), class = "cier_error_input")
+  expect_error(cier_lazr(x, kneedle = NA), class = "cier_error_input")
+  expect_error(cier_lazr(x, kneedle = c(TRUE, FALSE)), class = "cier_error_input")
+})
+
+test_that("kneedle abstains (NA cutoff + warning, flags nobody) below three scores", {
+  # Two scoring rows plus all-NA rows: only two finite Laz.R values remain, so
+  # the elbow is undefined and the cutoff abstains -- the percentile path's
+  # contract, reached through the kneedle resolver.
+  x <- rbind(c(1, 2, 3, 4, 5, 4, 3, 2, 1, 2),
+             c(5, 4, 3, 2, 1, 2, 3, 4, 5, 4),
+             matrix(NA_real_, nrow = 3L, ncol = 10L))
+  storage.mode(x) <- "double"
+  expect_warning(out <- cier_lazr(x, kneedle = TRUE),
+                 class = "cier_warning_insufficient_items")
+  expect_true(is.na(out$cutoff))
+  expect_false(any(out$flagged, na.rm = TRUE))     # an NA cutoff flags nobody
+  expect_false(out$flagged[[1L]])                  # a scored row -> FALSE, not NA
+  expect_true(all(is.na(out$flagged[3:5])))        # the all-NA rows abstain
+})
+
 # ---- print snapshot (locked; reuses the shared cier_index print) ------------
 
 test_that("print renders the locked cli summary (upper direction)", {
