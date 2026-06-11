@@ -33,8 +33,9 @@ reports, the value cier reproduces, and an honest verdict: **matches** means
 agreement at the paper's two-decimal precision (flagged counts: exact),
 **close** means within 0.03 (counts: within 2) without two-decimal agreement,
 and **differs** means beyond that, always with a written explanation. Where
-cier has no corresponding functionality the cier cell is left **empty** — the
-row still appears, so the table can be filled in if the package grows.
+cier has no corresponding functionality — or, in one case, the paper applied
+no reproducible rule — the cier cell is left **empty**; the row still appears,
+so the table can be filled in if the package grows.
 
 **How this document is built.** The external datasets sit on OSF and an ETH
 polybox share with no redistribution licence, so cier never bundles them, and
@@ -190,7 +191,6 @@ battery_n <- c("1|BS|partial" = 239, "1|BS|full" = 237, "2|BS|partial" = 226,
                "4|WS|full" = 244, "4|BS|full" = 363, "5|WS|partial" = 240,
                "5|BS|partial" = 360, "5|WS|full" = 242, "5|BS|full" = 361)
 battery_ni <- c(
-  Time   = "timing indices are outside cier's scope",
   lz     = "parametric IRT person-fit (lz) is not implemented in cier",
   Infit  = "parametric IRT person-fit (infit MSE) is not implemented in cier",
   Outfit = "parametric IRT person-fit (outfit MSE) is not implemented in cier",
@@ -292,15 +292,13 @@ for (ix in names(schroeders_t3)) {
 bruhlmann_t2 <- list(
   list("Self-report aggregate", 106, "not_implemented",
        "self-report responding-tendency scales are outside cier's scope"),
-  list("Bogus item", 92, "not_implemented",
-       paste("direct attention-check items are outside cier's scope; the",
-             "column ships in bfi_careless")),
-  list("Instructed response item", 96, "not_implemented",
-       paste("direct attention-check items are outside cier's scope; the",
-             "column ships in bfi_careless")),
+  list("Bogus item", 92, "", ""),
+  list("Instructed response item", 96, "", ""),
   list("Response time", 0, "not_implemented",
-       paste("timing indices are outside cier's scope; the paper flagged no",
-             "respondent on time")),
+       paste("the authors flagged nobody: visual inspection of the",
+             "response-time distribution showed no conspicuous cluster, and",
+             "no numeric cutoff was set -- so there is no rule for",
+             "cier_total_time() to reproduce")),
   list("Longstring", 25, "", ""),
   list("Odd-even consistency", 63, "", ""),
   list("Resampled individual reliability", 63, "", ""),
@@ -352,11 +350,27 @@ bruhlmann_res[, c("index", "cier_value")]
 ```
 
 The two direct checks the paper pairs these with are also in the bundled data
-and reproduce exactly with two lines of base R:
+and reproduce exactly with `cier_attention()`. The pass-sets follow the
+authors' analysis script: the bogus item passes on the non-endorsing options
+1–2 (their script codes agreement of 3 or higher as failing; the paper's prose
+says "4 or higher", but the script's rule is what Table 2 reports), and the
+instructed item passes on the directed answer 0.
 
 ```{r bruhlmann-direct}
-sum(bfi_careless$v_Bogus_Item >= 3)   # paper: 92 failed the bogus item
-sum(bfi_careless$v_IRI != 0)          # paper: 96 failed the instructed item
+bogus      <- cier_attention(bfi_careless["v_Bogus_Item"], pass = list(c(1, 2)))
+instructed <- cier_attention(bfi_careless["v_IRI"], pass = list(0))
+# count failures among answered checks; a missing check abstains (NA), not a
+# failure, matching the authors' missing-is-pass rule
+n_bogus      <- sum(bogus$value >= 1, na.rm = TRUE)
+n_instructed <- sum(instructed$value >= 1, na.rm = TRUE)
+c(bogus = n_bogus, instructed = n_instructed)
+# paper: 92 failed the bogus item, 96 the instructed item
+bruhlmann_res <- rbind(bruhlmann_res, data.frame(
+  paper = "bruhlmann_2020", study = "", design = "", level = "",
+  paper_statistic = "n flagged",
+  index = c("Bogus item", "Instructed response item"),
+  cier_value = c(n_bogus, n_instructed),
+  stringsAsFactors = FALSE))
 ```
 
 One quirk in the authors' pipeline matters for the two consistency counts.
@@ -410,7 +424,10 @@ on random split-halves *within each of the 15 BFI-2 facets* (reverse-keyed
 items declared via the item metadata); Gnormed and Ht per Big Five domain,
 reverse-keyed, then averaged — the paper's "global" construction. Synonyms
 and antonyms use cier's default whole-sample pairing at the paper's
-`critical_r = .60`.
+`critical_r = .60`. Total time is the row sum of the per-item Qualtrics
+page-submit timers shipped in the same files (a respondent with no timed
+item abstains), scored with `cier_total_time()` and evaluated on the fast
+tail.
 
 ```{r battery-values}
 battery_zip <- fetch_cached(
@@ -432,9 +449,16 @@ battery_wave <- function(d, suffix = "") {
     paste0(x, "R", suffix) %in% names(d) ||  # twin columns; their presence
       paste0(x, suffix, "R") %in% names(d)   # marks the reverse-keyed items
   }, logical(1))
-  list(m = m, items = data.frame(scale = sub("[0-9]+$", "", base),
-                                 reverse_keyed = unname(twin),
-                                 max = 6L))
+  tm <- d[, paste0(base, suffix, "_Page_Submit")]  # per-item Qualtrics timers
+  tm[] <- lapply(tm, function(x) as.numeric(gsub(",", ".", as.character(x))))
+  tm <- as.matrix(tm)
+  tm[!is.finite(tm) | tm <= 0] <- NA_real_         # untimed cells drop
+  seconds <- rowSums(tm, na.rm = TRUE)
+  seconds[rowSums(!is.na(tm)) == 0L] <- NA_real_   # no timed item: abstain
+  list(m = m, seconds = seconds,
+       items = data.frame(scale = sub("[0-9]+$", "", base),
+                          reverse_keyed = unname(twin),
+                          max = 6L))
 }
 battery_values <- function(w) {
   list(
@@ -445,6 +469,7 @@ battery_values <- function(w) {
     r_pbis = list(v = cier_person_total(w$m)$value, dir = "lower"),
     Longstring = list(v = cier_longstring(w$m)$value, dir = "upper"),
     IRV = list(v = cier_irv(w$m)$value, dir = "lower"),
+    Time = list(v = cier_total_time(w$seconds)$value, dir = "lower"),
     Gnormed = list(v = domain_pooled(w$m, w$items, function(m, im) {
       cier_gnormed(m, im, seed = seed_resample)$value
     }), dir = "upper"),
@@ -943,8 +968,8 @@ properties of cier's label-free defaults, not statistical disagreements:
   reference sample, in both directions.
 
 The remaining battery indices — RPR, the person-total correlation, longstring,
-IRV, and Gnormed — reproduce the paper across all twelve study-design-level
-cells at or near the paper's own precision. For RPR this requires the split
+IRV, Gnormed, and total time — reproduce the paper across all twelve
+study-design-level cells at or near the paper's own precision. For RPR this requires the split
 halves to be drawn *within the 15 BFI-2 facets*: domain-level halves wash out
 the partially careless signal and lose four to six AUC points on the partial
 cells.

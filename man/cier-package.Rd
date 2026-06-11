@@ -6,7 +6,7 @@
 \alias{cier-package}
 \title{cier: Detect Careless and Insufficient Effort Responding in Survey Data}
 \description{
-A lean, fast toolkit for detecting careless and insufficient effort responding ('C/IER') in survey data using indirect response-pattern indices (longstring, intra-individual response variability, personal reliability, psychometric synonyms and antonyms, Mahalanobis distance, person-total correlation, and nonparametric person-fit statistics), following the indirect-index battery evaluated by Goldammer et al. (2024) \doi{10.3758/s13428-024-02484-3}. Flags respondents through an auditable, false-positive-rate-controlled layer with transparent, citable defaults.
+A lean, fast toolkit for detecting careless and insufficient effort responding ('C/IER') in survey data using indirect response-pattern indices (longstring, intra-individual response variability, personal reliability, psychometric synonyms and antonyms, Mahalanobis distance, person-total correlation, nonparametric person-fit statistics, and the sequence indices autocorrelation and 'Laz.R'), following the indirect-index battery evaluated by Goldammer et al. (2024) \doi{10.3758/s13428-024-02484-3}, plus survey-timing indices (total and per-page completion time) and a direct attention-check index. Flags respondents through an auditable, false-positive-rate-controlled layer with transparent, citable defaults.
 }
 \seealso{
 Useful links:

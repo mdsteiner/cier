@@ -155,8 +155,11 @@ pubres_battery_read <- function(dir, file) {
                   stringsAsFactors = FALSE)
 }
 
-# Raw matrix + facet-level item metadata for one wave of BFI-2 items.
-# `suffix` is "" (Studies 1/2) or "_t1" / "_t2" (Studies 4/5 wide files).
+# Raw matrix + facet-level item metadata + per-respondent total seconds for
+# one wave of BFI-2 items. `suffix` is "" (Studies 1/2) or "_t1" / "_t2"
+# (Studies 4/5 wide files). The total is the row sum of the per-item Qualtrics
+# page-submit timers shipped in the same files (untimed cells drop; a
+# respondent with no timed item gets NA and abstains downstream).
 pubres_battery_wave <- function(d, suffix = "") {
   base <- sub(paste0(suffix, "$"), "",
               grep(sprintf("^[eacno]_[a-z]+[0-9]+%s$", suffix), names(d),
@@ -167,14 +170,22 @@ pubres_battery_wave <- function(d, suffix = "") {
   twin <- vapply(base, function(x) {
     paste0(x, "R", suffix) %in% names(d) || paste0(x, suffix, "R") %in% names(d)
   }, logical(1))
-  list(m = m, items = data.frame(scale = sub("[0-9]+$", "", base),
-                                 reverse_keyed = unname(twin),
-                                 max = 6L))
+  tm <- d[, paste0(base, suffix, "_Page_Submit")]
+  tm[] <- lapply(tm, function(x) as.numeric(gsub(",", ".", as.character(x))))
+  tm <- as.matrix(tm)
+  tm[!is.finite(tm) | tm <= 0] <- NA_real_
+  seconds <- rowSums(tm, na.rm = TRUE)
+  seconds[rowSums(!is.na(tm)) == 0L] <- NA_real_
+  list(m = m, seconds = seconds,
+       items = data.frame(scale = sub("[0-9]+$", "", base),
+                          reverse_keyed = unname(twin),
+                          max = 6L))
 }
 
 # All per-respondent index values for one wave: the five matrix-only indices,
-# facet-split RPR, per-domain pooled Gnormed / Ht, and whole-sample synonym /
-# antonym scores at the paper's critical_r = .60.
+# facet-split RPR, per-domain pooled Gnormed / Ht, whole-sample synonym /
+# antonym scores at the paper's critical_r = .60, and the total completion
+# time (fast totals careless, so direction lower).
 pubres_battery_values <- function(w) {
   pooled <- function(fn) {
     dom <- substr(w$items$scale, 1, 1)
@@ -203,6 +214,7 @@ pubres_battery_values <- function(w) {
   vals$r_pbis <- list(v = cier_person_total(w$m)$value, dir = "lower")
   vals$Longstring <- list(v = cier_longstring(w$m)$value, dir = "upper")
   vals$IRV <- list(v = cier_irv(w$m)$value, dir = "lower")
+  vals$Time <- list(v = cier_total_time(w$seconds)$value, dir = "lower")
   vals$Gnormed <- list(v = pooled(function(m, im) {
     cier_gnormed(m, im, seed = pubres_seed)$value
   }), dir = "upper")
@@ -453,8 +465,12 @@ pubres_schroeders_cells <- function(d, iterations = 1000L) {
 
 # ---- Bruhlmann et al. (2020) -------------------------------------------------
 
-# Flagged counts at the authors' literal cutoffs, on the bundled BFI-44.
-# Their pass/fail rules treat an undefined (NA) consistency value as flagged.
+# Flagged counts at the authors' literal cutoffs, on the bundled BFI-44 plus
+# the two bundled attention checks. Their pass/fail rules treat an undefined
+# (NA) consistency value as flagged; the check pass-sets follow their analysis
+# script (bogus fails at agreement >= 3, instructed fails off the directed 0).
+# A missing check abstains (cier_attention returns NA) and is not a failure,
+# matching Bruhlmann's missing-is-pass rule -- hence na.rm on the check counts.
 pubres_bruhlmann_cells <- function() {
   bfi <- as.matrix(cier::bfi_careless[, 1:44])
   items <- data.frame(scale = sub("^v_BFI_([A-Za-z]+)[0-9].*$", "\\1",
@@ -466,12 +482,18 @@ pubres_bruhlmann_cells <- function() {
   rir <- cier_personal_reliability(bfi, items, n_resamples = 100L,
                                    seed = pubres_seed)$value
   ptc <- cier_person_total(bfi)$value
+  bog <- cier_attention(cier::bfi_careless["v_Bogus_Item"],
+                        pass = list(c(1, 2)))$value
+  iri <- cier_attention(cier::bfi_careless["v_IRI"], pass = list(0))$value
   data.frame(index = c("Longstring", "Odd-even consistency",
                        "Resampled individual reliability",
-                       "Person-total correlation"),
+                       "Person-total correlation", "Bogus item",
+                       "Instructed response item"),
              cier_value = c(sum(ls > 22),
                             sum(oec > 0 | is.na(oec)),
                             sum(rir > 0 | is.na(rir)),
-                            sum(ptc < 0 | is.na(ptc))),
+                            sum(ptc < 0 | is.na(ptc)),
+                            sum(bog >= 1, na.rm = TRUE),
+                            sum(iri >= 1, na.rm = TRUE)),
              stringsAsFactors = FALSE)
 }

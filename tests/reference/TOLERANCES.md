@@ -242,6 +242,22 @@ check by design: it shares the computation conventions with the vignette, so
 its job is pinning CSV-code agreement (anti-drift), while faithfulness to the
 papers is pinned by the frozen transcription plus the allowed-differs list.
 
+The v0.2 indices fill cells that previously carried a "not implemented"
+verdict; the transcription (and its digest) is unchanged. The battery paper's
+12 `Time` AUC cells: the per-respondent value is the row sum of the per-item
+Qualtrics page-submit timers shipped in the same study files (non-finite or
+non-positive cells drop; a respondent with no timed item abstains), scored
+with `cier_total_time()` and negated (direction lower) before the rank AUC --
+the construction that reproduced all 12 paper values within |delta| <= .004 in
+the pre-port validation. Bruhlmann's bogus / instructed flagged counts:
+single-check `cier_attention()` with the authors' analysis-script pass-sets
+({1, 2} for the bogus item, {0} for the instructed item); exact integer
+reproduction (92 / 96), the same pin `test-cier-attention.R` holds against the
+bundled data. **No new allowed-differs caps**: a `Time` cell beyond `close` or
+a non-exact attention count is a defect to diagnose, never to cap. Bruhlmann's
+response-time row stays empty -- the authors flagged nobody by visual
+inspection and published no numeric rule, so there is nothing to reproduce.
+
 ## How to use this table
 
 - Tests in `tests/testthat/test-cutoff.R` / `test-diagnostics.R` assert these

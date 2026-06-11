@@ -22,7 +22,7 @@ test_that("Bruhlmann flagged counts reproduce from the bundled data", {
   tab <- pubres_table()
   committed <- tab[tab$paper == "bruhlmann_2020" &
                      !tab$status %in% c("not_implemented", "not_evaluated"), ]
-  expect_identical(nrow(committed), 4L)
+  expect_identical(nrow(committed), 6L)
   pubres_compare(committed, pubres_bruhlmann_cells(), by = "index")
 })
 
@@ -66,7 +66,7 @@ test_that("Goldammer battery AUCs reproduce from the fetched data", {
   tab <- pubres_table()
   committed <- tab[tab$paper == "goldammer_battery_2024" & tab$study != "3" &
                      !tab$status %in% c("not_implemented", "not_evaluated"), ]
-  expect_identical(nrow(committed), 124L)  # (7 core + syn + ant) * 12 + 16
+  expect_identical(nrow(committed), 136L)  # (8 core + syn + ant) * 12 + 16
   pubres_compare(committed, pubres_battery_cells(dir),
                  by = c("study", "design", "level", "index"))
 })

@@ -14,13 +14,24 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ## What `cier` does
 
 Careless and insufficient-effort responding (C/IER) is survey data from people who
-were not engaging with the items. `cier` flags it with **indirect, response-pattern
-indices** -- longstring, intra-individual response variability (IRV), even-odd and
-personal reliability, psychometric synonyms and antonyms, Mahalanobis distance,
-person-total correlation, and two nonparametric person-fit statistics (Gnormed, Ht).
-Each index scores every respondent and flags a tail through a cutoff rule. 
-The current set follows the recommended indirect battery evaluated by Goldammer et al. 
-(2024); more criteria may be added in later versions. T
+were not engaging with the items. `cier` flags it with a lean set of published
+indices; each one scores every respondent and flags a tail through a cutoff rule.
+
+- **Response-pattern indices** -- longstring, intra-individual response variability
+  (IRV), even-odd and personal reliability, psychometric synonyms and antonyms,
+  Mahalanobis distance, person-total correlation, and two nonparametric person-fit
+  statistics (Gnormed, Ht) -- the indirect battery evaluated by Goldammer et al.
+  (2024) -- plus two sequence indices, autocorrelation (Gottfried et al., 2022)
+  and Laz.R (Biemann et al., 2025).
+- **Timing indices** -- total completion time and per-page speeding, for when the
+  survey platform exported timestamps.
+- **Direct checks** -- a failed-count over the attention-check items a study
+  designed in.
+
+`cier_screen()` runs the ten-index response-pattern battery in one call. The
+sequence, timing, and direct indices are standalone functions for now -- the
+sections below show each one -- pending an evaluation of what they add to the
+screen's votes.
 
 ## The example data
 
@@ -148,6 +159,101 @@ unevenly:
   same answer scales should be analyzed at one time"; on a mixed survey, score
   each same-format block in its own call.
 
+## Sequence patterns: autocorrelation and Laz.R
+
+Two further pattern indices read the response *sequence* -- the answers in the
+order they were clicked -- and target the repetitive or periodic profiles the
+consistency family abstains on (a perfect straightliner has no within-person
+variance to correlate, but scores maximally on both of these):
+
+- `cier_autocorrelation()` (Gottfried et al., 2022) takes the largest absolute
+  autocorrelation of each respondent's response vector across a range of lags.
+  The default lag range follows the reference implementation
+  (`max_lag = ncol - 3`); on a long battery that includes short high-lag
+  slices whose correlation saturates near 1, so follow the paper's advice and
+  restrict to low lags.
+- `cier_lazr()` (Biemann et al., 2025) scores first-order Markov response
+  predictability: how well each answer is predicted by the one before it. It
+  generalises longstring -- straightlining, alternating ("seesaw"), and
+  diagonal-lining all score high. `kneedle = TRUE` swaps the percentile cutoff
+  for the paper's sample-specific elbow rule.
+
+```{r}
+cier_autocorrelation(resp, max_lag = 8L)
+cier_lazr(resp)
+```
+
+Both indices read the as-clicked sequence, so they assume the items share one
+response scale and are scored in administration order (for mixed formats, see
+the previous section). And both are *pattern specialists*: Laz.R is by
+construction blind to random responding (Biemann et al., 2025), and a random
+careless profile is exactly the irregular kind of response vector these
+indices cannot separate from careful responding. Treat them as coverage for
+the repetitive profile, alongside longstring and IRV -- not as stand-alone
+detectors.
+
+## Timing: total time and page time
+
+When the survey platform exports timestamps, response time is the cheapest
+C/IER evidence there is, and on *fully* careless respondents one of the
+strongest (Goldammer et al., 2024). The timing indices take the platform's
+exports directly -- there is no response matrix:
+
+```{r}
+secs <- c(420, 380, 95, 510, 47, 460, 405, 88, 390, 430)
+cier_total_time(secs)
+```
+
+`cier_total_time()` flags the fast tail (the lower-percentile twin of the
+ranking convention below). One published alternative is anchored to the sample
+median instead: `frac_median = 0.5` flags respondents faster than half the
+median (Leiner, 2019) -- a cutoff that stays meaningful even when a large
+share of the sample speeds, which is exactly where a percentile is least
+defensible.
+
+`cier_page_time()` catches within-survey speeding bursts that a plausible
+total can hide: it counts each respondent's pages answered faster than
+`min_seconds = 2` seconds per item (Bowling et al., 2023), and by default any
+rapid page flags.
+
+```{r}
+page_seconds <- matrix(c(20, 18, 22,
+                         19, 21, 20,
+                          3,  2, 24,
+                         22, 20, 19,
+                          2,  2,  2),
+                       nrow = 5L, byrow = TRUE)
+cier_page_time(page_seconds, items_per_page = c(2, 2, 2))
+```
+
+Note what that default is: an **absolute, cited heuristic** -- deliberately
+unlike the percentile indices, because plausible reading speed does not adapt
+to a sample's contamination. It is a *floor* on effort, not a content check:
+Biemann et al. (2025) report that a large share of whole-survey straightliners
+pass a 2 s/item screen. Use timing alongside content indices, never alone.
+
+## Direct checks: scoring attention-check items
+
+The bundled data's two checks can be scored as an index instead of by hand.
+`pass` lists, per check column, the response value(s) that count as passing --
+here the bogus item passes on the non-endorsing options 1 and 2, and the
+instructed item passes on the directed answer 0 (Brühlmann et al., 2020):
+
+```{r}
+cier_attention(bfi_careless[, c("v_Bogus_Item", "v_IRI")],
+               pass = list(c(1, 2), 0))
+```
+
+Per check, the failures reproduce the paper's own counts -- 92 on the bogus
+item, 96 on the instructed item; `vignette("published-results")` shows that
+reproduction. The caveat from the top of this vignette applies with full
+force: a failed check is a **partial and biased** signal, not ground truth,
+and checks must be designed into the study in advance (Meade & Craig, 2012).
+Used that way -- as one piece of converging evidence among several -- a direct
+check is the cheapest anchor a screen can have. An unanswered check
+contributes no evidence: cier counts failures among the checks a respondent
+answered, and a respondent who answered none abstains.
+
 ## Choosing a cutoff is a ranking decision, not a calibration
 
 Every percentile index cuts the tail at a target fraction (`fpr`, default 0.05). It
@@ -182,6 +288,14 @@ fact the data hands you. Two habits keep that honest:
 
 ## References
 
+Biemann, T., Koch-Bayram, I. F., Meier-Barthold, M., & Aguinis, H. (2025). Using
+Markov chains to detect careless responding in survey research. *Organizational
+Research Methods, 28*(4), 543-568.
+
+Bowling, N. A., Huang, J. L., Brower, C. K., & Bragg, C. B. (2023). The quick and
+the careless: The construct validity of page time as a measure of insufficient
+effort responding to surveys. *Organizational Research Methods, 26*(2), 323-352.
+
 Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020). The quality of
 data collected online: An investigation of careless responding in a crowdsourced
 sample. *Methods in Psychology, 2*, 100022.
@@ -196,6 +310,13 @@ measures. *Behavior Research Methods, 56*(8), 8422-8449.
 Gottfried, J., Ježek, S., & Králová, M. (2022). Autocorrelation screening: A
 potentially efficient method for detecting repetitive response patterns in
 questionnaire data. *Practical Assessment, Research & Evaluation, 27*, Article 2.
+
+Leiner, D. J. (2019). Too fast, too straight, too weird: Non-reactive indicators
+for meaningless data in internet surveys. *Survey Research Methods, 13*(3),
+229-248.
+
+Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey
+data. *Psychological Methods, 17*(3), 437-455.
 
 Niessen, A. S. M., Meijer, R. R., & Tendeiro, J. N. (2016). Detecting careless
 respondents in web-based questionnaires: Which method to use? *Journal of Research

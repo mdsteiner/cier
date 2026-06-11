@@ -16,9 +16,9 @@ coverage](https://codecov.io/gh/mdsteiner/cier/graph/badge.svg)](https://app.cod
 survey data using **indirect, response-pattern indices**. It favours a
 small, validated set of indices and an auditable,
 false-positive-rate-controlled flagging layer over a large method count
-– every number traces to a paper or a trusted package. The current
-battery follows the indirect indices evaluated by Goldammer et
-al. (2024); further criteria may be added over time.
+– every number traces to a paper or a trusted package. The core battery
+follows the indirect indices evaluated by Goldammer et al. (2024);
+standalone sequence, timing, and attention-check indices complement it.
 
 ## The indices
 
@@ -38,6 +38,19 @@ al. (2024); further criteria may be added over time.
 `cier_gnormed` / `cier_ht` use the suggested `PerFit` / `mokken`
 packages and are skipped with a recorded reason when those are not
 installed.
+
+Five further indices are standalone functions – `cier_screen()` does not
+run them (yet): they read inputs the response matrix does not carry
+(timestamps, check keys) or overlap with the battery in ways still being
+evaluated.
+
+| Index | Function | Family | Flags | Default cutoff |
+|----|----|----|----|----|
+| Autocorrelation | `cier_autocorrelation` | sequence pattern | repetitive / periodic answers | 5% percentile |
+| Laz.R (Markov predictability) | `cier_lazr` | sequence pattern | predictable transitions | 5% percentile |
+| Total time | `cier_total_time` | timing | fast completion | 5% percentile (lower) |
+| Page time | `cier_page_time` | timing | pages under 2 s/item | any rapid page |
+| Attention checks | `cier_attention` | direct | failed checks | any failed check |
 
 ## Installation
 

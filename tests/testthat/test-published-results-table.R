@@ -159,14 +159,16 @@ test_that("the not-implemented set is pinned exactly", {
   tab <- pubres_table()
   ni <- tab[tab$status == "not_implemented", ]
   expect_setequal(unique(ni$index[ni$paper == "goldammer_battery_2024"]),
-                  c("Time", "lz", "Infit", "Outfit", "INDCHI"))
-  expect_identical(sum(ni$paper == "goldammer_battery_2024"), 60L)
+                  c("lz", "Infit", "Outfit", "INDCHI"))
+  expect_identical(sum(ni$paper == "goldammer_battery_2024"), 48L)
   expect_setequal(unique(ni$index[ni$paper == "schroeders_2022"]),
                   c("Zh", "GBM (responses)", "GBM (response times)",
                     "GBM (responses + times)"))
+  # the response-time row stays empty for a different reason than the rest:
+  # the authors flagged nobody by visual inspection and published no numeric
+  # cutoff, so there is no rule to reproduce (cier_total_time itself shipped)
   expect_setequal(ni$index[ni$paper == "bruhlmann_2020"],
-                  c("Self-report aggregate", "Bogus item",
-                    "Instructed response item", "Response time",
+                  c("Self-report aggregate", "Response time",
                     "Open-answer quality",
                     "Latent profile class (careless)"))
   expect_identical(sum(ni$paper == "goldammer_rpr_2024"), 0L)
@@ -265,6 +267,10 @@ test_that("values are in range and the reproduction is not vacuous", {
              c("index", "r_pbis"))
   floor_cell(0.75, c("study", "1"), c("design", "BS"), c("level", "full"),
              c("index", "RPR"))
+  # total time: low totals are careless, so a missed orientation flip on the
+  # lower-direction score cannot clear this floor (paper: .87)
+  floor_cell(0.75, c("study", "1"), c("design", "BS"), c("level", "full"),
+             c("index", "Time"))
   # facet-level RPR splits: domain-level splits depress this cell to ~.83
   floor_cell(0.84, c("study", "1"), c("design", "BS"), c("level", "partial"),
              c("index", "RPR"))
@@ -340,6 +346,8 @@ test_that("the shipped vignette displays the committed values (anti-drift)", {
   }
   sentinel(c("study", "1"), c("design", "BS"), c("level", "full"),
            c("index", "RPR"))
+  sentinel(c("study", "1"), c("design", "BS"), c("level", "full"),
+           c("index", "Time"))
   sentinel(c("paper", "goldammer_rpr_2024"), c("level", "23 facets"),
            c("index", "RPR25"), c("paper_statistic", "AUC"))
   sentinel(c("paper", "schroeders_2022"), c("index", "Mahalanobis"),
@@ -347,4 +355,7 @@ test_that("the shipped vignette displays the committed values (anti-drift)", {
   bru <- pubres_cell(tab, c("paper", "bruhlmann_2020"), c("index", "Longstring"))
   skip_if(is.na(bru$cier_value), "sentinel cell not filled yet")
   expect_match(text, as.character(bru$cier_value), fixed = TRUE)
+  bog <- pubres_cell(tab, c("paper", "bruhlmann_2020"), c("index", "Bogus item"))
+  skip_if(is.na(bog$cier_value), "sentinel cell not filled yet")
+  expect_match(text, as.character(bog$cier_value), fixed = TRUE)
 })
