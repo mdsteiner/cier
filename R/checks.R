@@ -49,6 +49,25 @@ assert_single_override <- function(rate, rate_name, cutoff,
   invisible(NULL)
 }
 
+# Guard a set of mutually-exclusive cutoff-override knobs -- the n-way form of
+# assert_single_override() for an index that exposes more than two. cier_total_time
+# has three (`fpr`, `frac_median`, `cutoff`), each a different way to set the same
+# cutoff. `args` is a named list of the knob values (NULL where unset); abort when
+# more than one is supplied, naming the offenders so the message lists exactly the
+# pair (or triple) given.
+assert_single_cutoff <- function(args, call = rlang::caller_env()) {
+  supplied <- names(args)[!vapply(args, is.null, logical(1L))]
+  if (length(supplied) > 1L) {
+    cier_abort(
+      "cier_error_input",
+      c("Supply only one of {.arg {supplied}}.",
+        "i" = "They are different ways to set the same cutoff."),
+      data = list(args = supplied), call = call
+    )
+  }
+  invisible(NULL)
+}
+
 check_number <- function(x, arg, lower = -Inf, upper = Inf,
                          call = rlang::caller_env()) {
   if (!isTRUE(checkmate::check_number(x, lower = lower, upper = upper,
@@ -193,6 +212,53 @@ check_responses <- function(responses, arg = "responses",
     )
   }
   m
+}
+
+# Coerce and validate a per-respondent completion-time vector. cier_total_time
+# takes a BARE numeric vector -- one total in seconds per respondent, what survey
+# platforms export -- not a response matrix: a 2-D / data.frame input is ambiguous
+# about which axis is respondents, so it is rejected with a fix-it hint. Every
+# observed (non-NA) time must be finite and strictly positive (a duration cannot be
+# zero or negative; NaN / infinite are rejected); NA is permitted and abstains.
+check_seconds <- function(seconds, arg = "seconds", call = rlang::caller_env()) {
+  if (!is.numeric(seconds) || !is.null(dim(seconds))) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be a numeric vector (one completion time per respondent).",
+        "x" = "Got {.cls {class(seconds)}}; a 2-D or non-numeric input is rejected.",
+        "i" = "Sum per-cell response times to one total per respondent first."),
+      data = list(arg = arg), call = call
+    )
+  }
+  if (length(seconds) == 0L) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} must have at least one element.",
+      data = list(arg = arg), call = call
+    )
+  }
+  # is.nan() / is.infinite() distinguish NaN and +/-Inf from NA -- is.na() is TRUE
+  # for NaN, so stripping NA first would hide a NaN. Check the raw vector before
+  # dropping genuine NA (which abstains).
+  if (any(is.nan(seconds) | is.infinite(seconds))) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} may contain only finite positive seconds or {.val NA}.",
+        "x" = "Found {.val NaN} or infinite values."),
+      data = list(arg = arg), call = call
+    )
+  }
+  obs <- seconds[!is.na(seconds)]
+  if (any(obs <= 0)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be strictly positive completion times in seconds.",
+        "x" = "Found zero or negative values; a completion time is greater than zero.",
+        "i" = "Recode missing durations to {.val NA}; they abstain."),
+      data = list(arg = arg), call = call
+    )
+  }
+  as.numeric(seconds)
 }
 
 # Require integer-coded responses: every non-NA value must be a whole number.

@@ -137,7 +137,9 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 | autocorrelation | per-row max abs lag autocorrelation vs hand-rolled lagged-`cor()` oracle | 1e-10 | `ref-autocorrelation-gottfried2022.R` |
 | autocorrelation | vs `responsePatterns::rp.acors()` on complete data (`na_rm = FALSE`) | 1e-10 | `responsePatterns` (0.1.1) |
 | lazr | per-row Laz.R (Eq. 3) vs hand-rolled oracle; footnote-2 `Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3`, John worked example 33/49, straightliner / diagonal-liner = 1.0 | 1e-12 (obs ~1e-16) | `ref-lazr-biemann2025.R` |
-| total_time | identity on a validated seconds vector vs trivial oracle | 0 (stub) | oracle-only |
+| total_time | per-respondent value = validated seconds vector (identity, NA-preserving) vs `ref_total_time` | 0 (exact, `expect_identical`) | `ref-total-time.R` |
+| total_time | percentile-lower cutoff vs `stats::quantile(finite, fpr, type = 7)` | 1e-12 (obs 0) | base R / `ref-total-time.R` |
+| total_time | median-relative cutoff vs `frac_median * stats::median(finite)` | 1e-12 (obs 0) | base R / `ref-total-time.R` |
 | page_time | rapid-page count vs counting-rule oracle | 0 (stub) | oracle-only |
 | attention | failed-check count vs membership-count oracle; `bfi_careless` 92 bogus / 96 instructed reproduction | 0 (stub) | oracle-only |
 

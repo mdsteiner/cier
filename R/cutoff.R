@@ -44,6 +44,29 @@ resolve_percentile_cutoff <- function(values, direction, fpr, call) {
   as.numeric(stats::quantile(finite, probs = probs, names = FALSE, type = 7L))
 }
 
+# Median-relative cutoff for the timing family: flag respondents faster than a
+# fraction `frac` of the sample median (Leiner 2019 Relative Speed Index; Greszki
+# et al. 2015). The cutoff is `frac * median(finite values)`. Like the percentile
+# resolver this drops non-finite values first and abstains -- NA plus the same
+# typed `cier_warning_insufficient_items` -- when none remain, so the all-missing
+# case mirrors the percentile path rather than returning a silent NaN. This is an
+# OVERRIDE resolver (median-anchored, data-dependent), dispatched inline by the
+# total-time wrapper, not a registry default routed through resolve_cutoff().
+# Internal: the wrapper has validated `frac` in (0, 1], so it does no input check.
+resolve_median_cutoff <- function(value, frac, call = rlang::caller_env()) {
+  finite <- value[is.finite(value)]
+  if (length(finite) == 0L) {
+    cier_warn(
+      "cier_warning_insufficient_items",
+      c("Cannot resolve a median-relative cutoff: no finite values remain.",
+        "i" = "Returning {.val NA} as the cutoff."),
+      data = list(n_used = 0L), call = call
+    )
+    return(NA_real_)
+  }
+  frac * stats::median(finite)
+}
+
 # Resolve a fixed cutoff. With `n_items` supplied the value is a fraction of the
 # item count (`ceiling(value * n_items)`); without it the value is a literal
 # threshold on the score and passes through verbatim. The two modes have

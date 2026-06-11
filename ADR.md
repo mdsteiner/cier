@@ -104,6 +104,47 @@ deviations from the source papers and the archived previous version:
   cites it without a `\doi` (the references-DOI guard only constrains DOIs that
   appear in a references block).
 
+## Timing family: a per-respondent seconds vector and a three-knob cutoff override
+
+`cier_total_time` opens the timing family and fixes its input contract. Unlike
+every response-pattern index it takes **no response matrix**: the argument
+`seconds` is a bare numeric vector of one total completion time per respondent --
+the shape survey platforms export. A two-dimensional input (matrix or data frame)
+is a typed `cier_error_input`: which axis is the respondent is ambiguous, and
+summing per-cell times to a per-respondent total is the user's one line of base R.
+Each observed time must be **strictly positive** (a zero or negative duration
+errors; `NaN` / infinite error -- and `is.na()` is `TRUE` for `NaN`, so the kernel
+tests `is.nan()` / `is.infinite()` on the raw vector *before* dropping genuine
+`NA`); a missing time (`NA`) abstains. This is a deliberate break from the archived
+previous version, which summed a per-cell `times` matrix inside the heavy
+`cier_data()` pipeline via a `kernel_total_time`. The lean input is pre-summed, so
+there is **no kernel and no statistic**: the per-respondent value is the validated
+`seconds` vector itself (an identity). The single-kernel rule governs statistics,
+not an identity, so no `index-kernels-timing.R` is introduced here; the shared
+timing kernel file lands with `cier_page_time`, the first timing index that
+actually computes something.
+
+The default cutoff is the empirical **lower** percentile at `fpr = 0.05` (low
+totals flag speeders) -- the uniform knob, a divergence from the archive's stricter
+0.01 (recorded under "v0.2 index additions"). Total time adds a **third**
+mutually-exclusive cutoff override, `frac_median`: a median-relative rule that
+flags respondents faster than a fraction of the **sample median** (Leiner's 2019
+Relative Speed Index, `frac_median = 0.5`; Greszki et al. 2015 at 0.5 / 0.4 / 0.3).
+It is anchored to the median, so it is robust to up to half the sample responding
+carelessly -- exactly where the empirical percentile, which flags `fpr` by
+construction, is least defensible. Its domain is `(0, 1]` (a fraction of the
+median; above 1 would flag the slower-than-median half, nonsensical for a speeding
+index), and it flags with the package's uniform lower comparator
+(`value <= cutoff`) -- "faster than" is operationalised as `<=`, immaterial on
+continuous times and keeping one comparator path. Because the median is
+data-dependent, `frac_median` resolves through a dedicated **override** resolver,
+`resolve_median_cutoff()` in `cutoff.R` (dispatched inline by the wrapper, as
+`cier_longstring` dispatches its `frac`), not the value-only `resolve_cutoff()`; on
+an all-missing vector it abstains to `NA` with the same
+`cier_warning_insufficient_items` as the percentile path. The "every rate-based
+**default** resolves through `resolve_cutoff`" rule is unaffected -- `frac_median`
+is an override, not a default.
+
 ## Cutoff philosophy
 
 There is no ground truth in applied use, and no label-free rule can validate its
@@ -259,6 +300,14 @@ Putting all validation in the public function gives the earliest possible
 failure. The cost is that a future wrapper which forgets to validate would pass
 bad input silently rather than get a typed error; the mitigation is the
 wrapper-validation convention plus per-wrapper input-error tests.
+
+`cier_total_time` is the one index with **three** mutually-exclusive knobs -- the
+rate `fpr`, the median-relative `frac_median`, and the literal `cutoff` (see
+"Timing family" above). They are guarded by `assert_single_cutoff()`, the n-way
+generalisation of `assert_single_override()`: it takes a named list of the knob
+values and aborts naming exactly the pair or triple supplied. The two-argument
+`assert_single_override()` stays in use for the two-knob indices; the n-way form
+is reached for only when an index exposes more than two ways to set its cutoff.
 
 ## Method-properties registry schema
 
