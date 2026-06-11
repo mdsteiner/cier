@@ -94,6 +94,7 @@ Other indirect indices:
 \code{\link[=cier_autocorrelation]{cier_autocorrelation()}},
 \code{\link[=cier_even_odd]{cier_even_odd()}},
 \code{\link[=cier_irv]{cier_irv()}},
+\code{\link[=cier_lazr]{cier_lazr()}},
 \code{\link[=cier_longstring]{cier_longstring()}},
 \code{\link[=cier_mahalanobis]{cier_mahalanobis()}},
 \code{\link[=cier_person_total]{cier_person_total()}},

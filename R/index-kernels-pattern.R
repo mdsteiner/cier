@@ -1,6 +1,6 @@
 # Purpose: Low-level numerical kernels for the pattern-family indirect indices
-#          (autocorrelation now; Laz.R lands in a later slice). Pure functions on
-#          a numeric response matrix; the wrappers (R/cier-autocorrelation.R)
+#          (autocorrelation and Laz.R). Pure functions on a numeric response
+#          matrix; the wrappers (R/cier-autocorrelation.R, R/cier-lazr.R)
 #          validate input. Single-kernel rule: one production implementation per
 #          statistic. Pattern indices read the as-clicked response sequence, so
 #          they are computed on the RAW responses with no reverse-keying.
@@ -122,4 +122,64 @@ kernel_autocorrelation_na_rm <- function(responses, min_lag, max_lag) {
     }
     best
   }, numeric(1L))
+}
+
+# ---- Laz.R ------------------------------------------------------------------
+
+# Per-respondent Laz.R (Biemann, Koch-Bayram, Meier-Barthold & Aguinis 2025,
+# Eq. 3): the average probability with which the previous answer predicts the
+# next. Over each respondent's consecutive (cur, nxt) pairs with both endpoints
+# present (an NA endpoint drops that transition -- the drop-NA convention),
+# tabulate the transition counts T, row-normalise to P, and return
+#   value = sum(P * T) / n_trans = sum_i (sum_j T_ij^2) / rowsum_i / n_trans.
+# Higher = more predictable = more careless; the value lies in (~1/s, 1].
+#
+# The statistic is invariant to the assumed anchor count, so the kernel needs no
+# `s`: it rank-maps the observed values to a dense 1..s index over the DISTINCT
+# anchors actually used (so any base -- 0-based, bipolar -- and any unobserved
+# anchor score identically). Ranking over distinct values, not the raw value
+# span, keeps the bin space bounded by the number of distinct responses
+# (<= ncol), so a stray large value (an un-recoded numeric missing code, a
+# sentinel, a leaked id) cannot inflate `n * s * s` into a 32-bit integer
+# overflow or a huge allocation. A respondent with fewer than two valid
+# transitions abstains (NA): a single transition gives P_ij * T_ij / 1 = 1
+# regardless of the pattern. Bare value vector (lean schema); the wrapper
+# resolves the percentile cutoff. The flat-index tabulate + reshape is one
+# vectorised pass, no per-row R call.
+kernel_lazr <- function(responses) {
+  n <- nrow(responses)
+  p <- ncol(responses)
+  if (p < 2L) {
+    return(rep(NA_real_, n))
+  }
+  cur <- responses[, -p, drop = FALSE]
+  nxt <- responses[, -1L, drop = FALSE]
+  valid <- !is.na(cur) & !is.na(nxt)
+  n_trans <- rowSums(valid)
+  cells <- which(valid)
+  if (length(cells) == 0L) {
+    return(rep(NA_real_, n))
+  }
+  cur_v <- cur[cells]
+  nxt_v <- nxt[cells]
+  anchors <- sort(unique(c(cur_v, nxt_v)))         # distinct used anchors, ranked
+  s <- length(anchors)
+  cur_i <- match(cur_v, anchors)
+  nxt_i <- match(nxt_v, anchors)
+  row_idx <- ((cells - 1L) %% n) + 1L              # which() is column-major
+  flat <- (row_idx - 1L) * (s * s) + (cur_i - 1L) * s + nxt_i
+  counts <- tabulate(flat, nbins = n * s * s)
+  # block[k, r] = T_r entry k (k = (cur - 1) * s + nxt, cur outer / nxt inner).
+  # The s x (s * n) view groups the s within-(r, i) cells into one column, so
+  # column sums give the per-(r, i) row sums of T.
+  block <- matrix(as.numeric(counts), nrow = s, ncol = s * n)
+  row_sum <- colSums(block)
+  sq_sum <- colSums(block^2)
+  contrib <- numeric(length(row_sum))
+  nz <- row_sum > 0
+  contrib[nz] <- sq_sum[nz] / row_sum[nz]
+  per_row_num <- colSums(matrix(contrib, nrow = s, ncol = n))
+  value <- per_row_num / n_trans
+  value[n_trans < 2L] <- NA_real_                  # also rewrites 0/0 = NaN
+  value
 }

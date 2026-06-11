@@ -195,6 +195,30 @@ check_responses <- function(responses, arg = "responses",
   m
 }
 
+# Require integer-coded responses: every non-NA value must be a whole number.
+# The Markov pattern index (cier_lazr) scores a transition matrix over discrete
+# response anchors, so a continuous / averaged (POMP) score has no Markov chain;
+# a typed error is clearer than silently dropping the non-integer transitions.
+# Run AFTER check_responses (so NaN / infinite values are caught there first);
+# the non-NA values are then finite numeric, so is_finite_whole() reduces to the
+# wholeness test -- reused here to keep the integer definition in one place.
+check_integer_responses <- function(m, arg = "responses",
+                                    call = rlang::caller_env()) {
+  obs <- m[!is.na(m)]
+  if (length(obs) > 0L && !is_finite_whole(obs)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be integer-coded responses (whole-number anchors).",
+        "x" = "Found non-integer values; {.fun cier_lazr} scores a Markov chain \\
+               over discrete response anchors.",
+        "i" = "Recode to integer anchors, or use an index that accepts \\
+               continuous scores such as {.fun cier_irv}."),
+      data = list(arg = arg), call = call
+    )
+  }
+  invisible(m)
+}
+
 # `scale`: required, character-coercible, every item labelled, >= min_scales
 # distinct labels (the split-half indices correlate across scales).
 check_items_scale <- function(items, min_scales, arg, call) {

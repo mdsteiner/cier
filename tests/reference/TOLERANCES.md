@@ -136,7 +136,7 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 |---|---|---:|---|
 | autocorrelation | per-row max abs lag autocorrelation vs hand-rolled lagged-`cor()` oracle | 1e-10 | `ref-autocorrelation-gottfried2022.R` |
 | autocorrelation | vs `responsePatterns::rp.acors()` on complete data (`na_rm = FALSE`) | 1e-10 | `responsePatterns` (0.1.1) |
-| lazr | per-row Laz.R (Eq. 3) vs hand-rolled oracle; footnote-2 `Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3`, John worked example 33/49, straightliner = 1.0 | 0 / 1e-15 (stub) | `ref-lazr-biemann2025.R` |
+| lazr | per-row Laz.R (Eq. 3) vs hand-rolled oracle; footnote-2 `Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3`, John worked example 33/49, straightliner / diagonal-liner = 1.0 | 1e-12 (obs ~1e-16) | `ref-lazr-biemann2025.R` |
 | total_time | identity on a validated seconds vector vs trivial oracle | 0 (stub) | oracle-only |
 | page_time | rapid-page count vs counting-rule oracle | 0 (stub) | oracle-only |
 | attention | failed-check count vs membership-count oracle; `bfi_careless` 92 bogus / 96 instructed reproduction | 0 (stub) | oracle-only |
@@ -157,6 +157,17 @@ PR / RPR. Laz.R, total time, page time, and attention have **no**
 external parity partner (verified 2026-06-10: no CRAN package implements Laz.R,
 and the timing / direct counting rules are trivial) -- they are oracle-only trust
 like PR / RPR.
+
+The Laz.R oracle encodes the wrapper's two signed-off conventions, so the
+parity holds on every row: **drop-NA** (a transition with a missing endpoint is
+dropped and the denominator is the count of valid transitions, not `N - 1` --
+the `5/7` not `5/9` row in `test-cier-lazr.R` distinguishes the two), and
+**matrix-only / anchor-count-invariant** scoring (the transition matrix is built
+over the observed integer anchors, so a constant integer shift of the responses
+leaves the value unchanged; non-integer responses are rejected upstream by the
+wrapper, not scored). These are deliberate deviations from Biemann et al.'s
+footnote-2 reference code (which adds NA as a Markov state via `useNA = "ifany"`)
+and are recorded in `ADR.md` ("Laz.R missing-data convention").
 
 ## Slice 12 — `cier_screen()` combiner
 

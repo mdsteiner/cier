@@ -68,10 +68,30 @@ deviations from the source papers and the archived previous version:
   single-`fpr`-knob ranking convention, and the score's documented
   sequence-length dependence makes an absolute cutoff indefensible. The study
   separately evaluates a paper-faithful Kneedle variant; the package may adapt.
-- **Laz.R missing-data convention.** Whether NA is an extra Markov state
-  (paper-faithful) or dropped from the transition counts (archive) is a kernel
-  decision **deferred to the Laz.R wrapper's** numerically-delicate sign-off
-  (evaluate first). The registry row does not encode it.
+- **Laz.R missing-data convention (resolved 2026-06-10 at the wrapper sign-off).**
+  `cier_lazr` **drops NA transitions**: a transition is counted only when both
+  endpoints are present, the denominator is the count of valid transitions (not
+  the item count minus one), NA is never a Markov state, and a respondent with
+  fewer than two valid transitions abstains (`NA`). This is the more defensible
+  behaviour: the paper's footnote-2 reference code uses `useNA = "ifany"`, which
+  makes a gap a *predictable* state and so scores a careful but incomplete
+  respondent (a blank tail) as near-maximally careless -- and the `< 2`-observed
+  guard cannot catch it. Drop-NA matches cier's abstain-on-missing house style
+  and the autocorrelation sibling's pairwise handling. The study separately
+  evaluates the paper-faithful NA-as-state variant; the registry row encodes none
+  of this (it is a kernel decision).
+- **Laz.R input shape: matrix-only, anchor-count-invariant.** `cier_lazr` takes
+  only the response matrix -- no `items` -- exactly like `cier_autocorrelation`.
+  The Laz.R value is **invariant to the assumed anchor count `s`** (it is
+  determined purely by the observed transition counts, so an unobserved or higher
+  anchor adds an all-zero row/column and changes nothing) and to the scale base
+  (0-based and bipolar codings score identically). `items` / `s` would therefore
+  buy only validation, not statistics, so they are omitted; non-integer responses
+  are a typed error and the same-answer-scale / administration-order assumption is
+  documented in the help page rather than enforced. This is a deliberate
+  divergence from the plan's earlier optional-`items` proposal (written before the
+  matrix-only autocorrelation sibling and against the superseded `categories`
+  schema).
 - **Total-time cutoff.** `percentile`, lower tail, fpr 0.05 -- the uniform knob,
   a divergence from the archive's stricter 0.01. A third mutually-exclusive
   cutoff override `frac_median` (flag respondents faster than a fraction of the
