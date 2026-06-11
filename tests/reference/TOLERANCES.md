@@ -142,7 +142,7 @@ other four are oracle-only (no CRAN package computes them), like PR / RPR.
 | total_time | median-relative cutoff vs `frac_median * stats::median(finite)` | 1e-12 (obs 0) | base R / `ref-total-time.R` |
 | page_time | per-respondent rapid-page count vs hand-rolled counting-rule oracle (`ref_page_time`) | 0 (exact, integer counts) | `ref-page-time.R` |
 | page_time | fixed cutoff (`ceiling(frac * n_pages)`, or a literal count verbatim) vs `ref_page_time_fixed_cutoff` | 0 (exact) | `ref-page-time.R` |
-| attention | failed-check count vs membership-count oracle; `bfi_careless` 92 bogus / 96 instructed reproduction | 0 (stub) | oracle-only |
+| attention | per-respondent failed-check count vs hand-rolled membership oracle (`ref_attention`); `bfi_careless` 92 bogus / 96 instructed / 136 any-failure reproduction | 0 (exact, integer counts) | `ref-attention-meade-craig-2012.R` |
 
 Autocorrelation has a CRAN parity partner (`responsePatterns::rp.acors()`), but
 it is the *authors' own* implementation, so the independent oracle is a

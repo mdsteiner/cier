@@ -193,6 +193,69 @@ input contract and the deliberate deviations from the archived previous version:
   oracle (`ref-page-time.R`) at tolerance 0 (exact integer counts), like
   `cier_total_time` / PR / RPR. Recorded in `tests/reference/TOLERANCES.md`.
 
+## Direct family: a pass-set spec and a failed-check count
+
+`cier_attention(checks, pass, cutoff = NULL)` opens the `direct` family -- indices
+that score the respondent's answers against author-declared correct / non-endorsing
+values rather than the response pattern. Its kernel lives in
+`R/index-kernels-direct.R`, the direct-family equivalent of
+`R/index-kernels-timing.R`. The input contract and the deliberate deviations from
+the archived previous version:
+
+- **One wrapper with a per-check pass-set, not three rule-based functions.** The
+  archive shipped `cier_instructed` (fail iff `response != key`), `cier_bogus`
+  (endorse iff `response > midpoint`), and `cier_infrequency` (endorse iff
+  `response == key`) behind the heavy `cier_data` pipeline. `cier_attention`
+  collapses all three into one function-first wrapper: `checks` is an `n x k`
+  matrix of raw check responses (a data.frame is coerced via the shared
+  `check_responses()`), and `pass` is a positional list of length `k` where
+  `pass[[j]]` lists the value(s) that **pass** check `j`. A respondent **fails** a
+  check when their answered response is **not** in its pass-set
+  (`!(x %in% pass[[j]])`). The pass-set subsumes every archive rule -- instructed
+  pass = the directed option, bogus pass = the non-endorsing options, infrequency
+  pass = every value but the infrequent one -- and puts the passing values in the
+  user's hands instead of hard-coding a midpoint or an equality. The per-respondent
+  value is the count of failed checks among answered ones (a lean bare-numeric
+  kernel; the archive's `n_missing` / position-weighting diag by-products are
+  dropped, as the light `cier_index` has no diag field). No reverse-keying and no
+  `items` metadata: pass values are read in the literal observed-response coding,
+  and each check carries its own pass-set, so checks on different response scales
+  mix freely. New input checker `check_pass()` (a list of length `k`, each element a
+  non-empty finite numeric vector -- an empty pass-set would fail everyone, and an
+  `NA` / `NaN` / infinite passing value cannot be a real response code).
+
+- **NA = no evidence; all-NA abstains (resolved 2026-06-11 at the wrapper sign-off).**
+  An unanswered check (`NA`) contributes no evidence -- it is counted as neither a
+  pass nor a failure -- and a respondent who answered **at least one** check scores a
+  finite count, while a respondent who answered **none** abstains (`value = NA`,
+  `flagged = NA`). This is a **deliberate deviation** from the archive's
+  `cier_instructed`, where a missing instructed response counted as a *failure* (the
+  respondent did not comply), and from Bruhlmann et al. (2020), who scored a missing
+  check as a *pass*. The no-evidence rule matches cier's abstain-on-missing house
+  style across every other index; the study separately evaluates the
+  NA-as-failure variant, and a toggle was considered and not shipped (the lean
+  default stands until the study shows a reason to add one).
+
+- **The value is a count; the cutoff is fixed, with one literal override.**
+  Direction `upper`; the default cutoff is the cited `fixed = 1` (any failed check
+  flags). The single override is a literal `cutoff` count in `[1, k]`
+  (`check_number(lower = 1, upper = k)`) used verbatim; no `frac` proportion knob
+  is exposed (a fraction of the check count is marginal when surveys carry only a
+  few checks) and no `fpr` / percentile knob exists (the default is an absolute
+  count, not an empirical tail), so an abstaining respondent never routes the
+  cutoff through the percentile abstention. The row cites Meade & Craig (2012),
+  `10.1037/a0028085` (already a registered DOI); Goldammer et al. (2024) is named in
+  the row notes and in the wrapper help page **without** a `\doi` (the
+  references-DOI guard only constrains DOIs that appear in a references block).
+
+- **Oracle-only trust.** No CRAN package implements this attention-check counting
+  rule as a C/IER index (verified 2026-06-10), so the parity check is the
+  hand-rolled membership-count oracle (`ref-attention-meade-craig-2012.R`) at
+  tolerance 0 (exact integer counts), like `cier_page_time` / `cier_total_time` /
+  PR / RPR. The headline recovery pin is the bundled `bfi_careless` -- pass `{1, 2}`
+  on the bogus item reproduces Bruhlmann's 92 failures and pass `{0}` on the
+  instructed `v_IRI` item reproduces 96. Recorded in `tests/reference/TOLERANCES.md`.
+
 ## Cutoff philosophy
 
 There is no ground truth in applied use, and no label-free rule can validate its

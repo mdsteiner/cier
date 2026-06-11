@@ -311,6 +311,41 @@ check_items_per_page <- function(items_per_page, n_pages,
   as.integer(items_per_page)
 }
 
+# Validate the per-check pass-set spec cier_attention takes: a list with one
+# element per column of `checks`, positional (pass[[j]] applies to column j). A
+# respondent fails check j when their answered response is NOT in pass[[j]], so
+# each pass-set must be a non-empty vector of finite passing values: an empty
+# pass-set would fail everyone (a likely user mistake), and an NA / NaN / infinite
+# passing value cannot be a real response code (the data side rejects them too).
+# Returns the list unchanged on success.
+check_pass <- function(pass, n_checks, arg = "pass", call = rlang::caller_env()) {
+  if (!is.list(pass) || length(pass) != n_checks) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be a list with one pass-set per check column.",
+        "x" = "Need a length-{n_checks} list (one element per column of \\
+               {.arg checks})."),
+      data = list(arg = arg, expected = n_checks), call = call
+    )
+  }
+  ok <- all(vapply(
+    pass,
+    function(p) is.numeric(p) && length(p) >= 1L && all(is.finite(p)),
+    logical(1L)
+  ))
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("Each {.arg {arg}} element must be a non-empty vector of finite \\
+         passing values.",
+        "i" = "{.arg {arg}}[[j]] lists the value(s) that pass check j; an \\
+               answered response outside it is a failure."),
+      data = list(arg = arg), call = call
+    )
+  }
+  pass
+}
+
 # Require integer-coded responses: every non-NA value must be a whole number.
 # The Markov pattern index (cier_lazr) scores a transition matrix over discrete
 # response anchors, so a continuous / averaged (POMP) score has no Markov chain;
