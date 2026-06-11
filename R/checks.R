@@ -261,6 +261,56 @@ check_seconds <- function(seconds, arg = "seconds", call = rlang::caller_env()) 
   as.numeric(seconds)
 }
 
+# Coerce and validate the per-page completion-time matrix cier_page_time takes:
+# an n x pages numeric matrix (data.frame / tibble coerced) of per-page TOTAL
+# times in seconds, one column per page. Reuses check_responses() for the
+# matrix / numeric / finite / non-empty contract (a bare vector is rejected --
+# which axis is the respondent is ambiguous), then adds the timing-specific rule
+# that every observed (non-NA) cell is strictly positive (a page time cannot be
+# zero or negative; NA marks an untimed page and contributes no evidence).
+check_page_seconds <- function(page_seconds, arg = "page_seconds",
+                               call = rlang::caller_env()) {
+  m <- check_responses(page_seconds, arg = arg, call = call)
+  # check_responses has already rejected NaN / infinite, so the only non-finite
+  # entries left are NA (untimed pages); na.rm skips them. any() over no observed
+  # cells (an all-NA matrix) is FALSE -- it passes here and abstains in the
+  # kernel. Scans in place rather than materialising the observed-cell subset.
+  if (any(m <= 0, na.rm = TRUE)) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must be strictly positive page times in seconds.",
+        "x" = "Found zero or negative values; a page time is greater than zero.",
+        "i" = "Recode untimed pages to {.val NA}; they contribute no evidence."),
+      data = list(arg = arg), call = call
+    )
+  }
+  m
+}
+
+# Validate the per-page item-count vector cier_page_time takes: a plain numeric
+# vector, one entry per column of `page_seconds`, every entry a positive whole
+# number (the page total is divided by it to get the mean per-item time). NA,
+# fractional, non-positive, non-numeric, wrong-length, and 2-D inputs all fail.
+# Returns the vector as integer on success.
+check_items_per_page <- function(items_per_page, n_pages,
+                                 arg = "items_per_page",
+                                 call = rlang::caller_env()) {
+  ok <- is.numeric(items_per_page) && is.null(dim(items_per_page)) &&
+    length(items_per_page) == n_pages && is_finite_whole(items_per_page) &&
+    all(items_per_page >= 1)
+  if (!ok) {
+    cier_abort(
+      "cier_error_input",
+      c("{.arg {arg}} must give the item count for every page.",
+        "x" = "Need a length-{n_pages} vector of positive whole numbers (one \\
+               per column of {.arg page_seconds}).",
+        "i" = "An untimed-but-present page still has its item count."),
+      data = list(arg = arg, expected = n_pages), call = call
+    )
+  }
+  as.integer(items_per_page)
+}
+
 # Require integer-coded responses: every non-NA value must be a whole number.
 # The Markov pattern index (cier_lazr) scores a transition matrix over discrete
 # response anchors, so a continuous / averaged (POMP) score has no Markov chain;

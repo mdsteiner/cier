@@ -117,5 +117,8 @@ Quarterly}, 79(2), 471-503.
 \seealso{
 \code{\link[=cier_irv]{cier_irv()}} and \code{\link[=cier_mahalanobis]{cier_mahalanobis()}} for response-content indices to
 pair with completion time; \code{\link[=cier_methods]{cier_methods()}} for the registry defaults.
+
+Other timing indices:
+\code{\link[=cier_page_time]{cier_page_time()}}
 }
 \concept{timing indices}

@@ -145,6 +145,54 @@ an all-missing vector it abstains to `NA` with the same
 **default** resolves through `resolve_cutoff`" rule is unaffected -- `frac_median`
 is an override, not a default.
 
+## Page time: a page-totals matrix, a count value, and a proportion override
+
+`cier_page_time(page_seconds, items_per_page, min_seconds = 2, frac, cutoff)` is
+the first timing index that actually computes something, so it opens the shared
+timing kernel file `R/index-kernels-timing.R` (`cier_total_time` is an identity
+with no kernel; the single-kernel rule governs statistics, not identities). Its
+input contract and the deliberate deviations from the archived previous version:
+
+- **Lean input: a page-totals matrix plus an explicit item-count vector.**
+  `page_seconds` is an `n x pages` matrix of each respondent's **total** time on
+  each page (one column per page -- the page-submit timer survey platforms
+  export); `items_per_page` is the per-page item count. The per-item rate the
+  Bowling et al. (2023) rule thresholds is the page total divided by
+  `items_per_page[j]`. This replaces the archive's heavy path (a `cier_data`
+  object carrying a per-cell `times` matrix, with page boundaries inferred from
+  `items$page`) -- the same break `cier_total_time` made from the pipeline. The
+  archive's page-boundary inference and its `cier_warning_page_fallback`
+  (one-item-per-page fallback when `items$page` was absent) are **dropped**:
+  pages are explicit columns now, so there is nothing to infer and no fallback to
+  warn about.
+- **Page-level NA, not cell-level.** A page with no recorded time (`NA`)
+  contributes no evidence -- it is neither counted rapid nor counted toward the
+  timed-page total -- and the per-item denominator is the **declared**
+  `items_per_page`, not a count of answered cells (the archive averaged over
+  answered items within a page). A respondent with at least one timed page scores
+  a finite count; a respondent whose every page is `NA` abstains (`value = NA`).
+  This is the deliberate simplification the one-number-per-page input buys.
+- **The value is a count; the cutoff is fixed, with a proportion override.**
+  Direction `upper`; the per-respondent value is the rapid-page **count** (lean
+  bare-numeric kernel -- the archive's `fastest_page_z` / `n_pages_used` diag
+  by-products are dropped, as the light `cier_index` has no diag field). The
+  default cutoff is the cited `fixed = 1` (any rapid page flags). Because a single
+  rapid page can be over-sensitive on a long survey, the wrapper exposes the
+  **two-knob override pattern longstring already uses**: `frac`, a fraction of the
+  **total page count** in `(0, 1]` resolving to `ceiling(frac * pages)` through
+  the existing `resolve_fixed_cutoff(value, n_items)`, and a literal `cutoff`
+  count in `[1, pages]` -- mutually exclusive via `assert_single_override`. The
+  `frac` denominator is the survey's page count (`ncol`), a single sample-level
+  cutoff, not a per-respondent count of answered pages. No `fpr` / percentile knob
+  exists (the default is an absolute count, not an empirical tail), so an
+  abstaining respondent never routes the cutoff through the percentile
+  abstention. Strictly-positive page times are required (zero / negative / `NaN` /
+  infinite are typed input errors; `NA` abstains), mirroring `check_seconds`.
+- **Oracle-only trust.** No CRAN package implements page time as a C/IER index
+  (verified 2026-06-10), so the parity check is the hand-rolled counting-rule
+  oracle (`ref-page-time.R`) at tolerance 0 (exact integer counts), like
+  `cier_total_time` / PR / RPR. Recorded in `tests/reference/TOLERANCES.md`.
+
 ## Cutoff philosophy
 
 There is no ground truth in applied use, and no label-free rule can validate its
