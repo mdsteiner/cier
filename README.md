@@ -114,6 +114,44 @@ cier_screen(resp, items,
 #> Skipped: 0
 ```
 
+## Simulating careless responding
+
+Alongside detection, `cier` can **generate** survey data with planted
+careless responding – a known pattern, extent, and onset in a known
+share of respondents – for power analysis, method comparison, and
+recovery tests. `cier_simulate()` is a data generator, not an index: it
+has no cutoff and never enters `cier_screen()`, and its output is *not*
+evidence of real-world validity (anchor accuracy claims to labelled
+data).
+
+``` r
+sim <- cier_simulate(
+  n          = 120,
+  items      = data.frame(scale = rep(c("E", "A", "C"), each = 6L), max = 5L),
+  prevalence = 0.2,
+  n_checks   = 2L,
+  seed       = 2026
+)
+sim
+#> ── cier_simulate ───────────────────────────────────────────────────────────────
+#> Respondents: 120 x 18 items (3 scales) -- 24 careless (20.0%).
+#> Patterns: alternating 4, diagonal 5, extreme 3, markov 3, midpoint 1, random 3,
+#> speeder 4, straightline 1.
+#> Extent: 24 full.
+#> Timing: $seconds (totals) + $page_seconds (3 pages: 6+6+6 items).
+#> Checks: 2 attention checks in $checks (pass sets in $pass).
+#> Truth: $truth -- careless, pattern, extent, onset_item, offset_item, speeded,
+#> params.
+#> Simulated data (power analysis / method comparison / recovery tests), not
+#> evidence of real-world validity.
+```
+
+Each slot feeds a shipped function directly –
+`cier_screen(sim$responses, sim$items)`, `cier_total_time(sim$seconds)`,
+`cier_page_time(sim$page_seconds, sim$items_per_page)`, and
+`cier_attention(sim$checks, sim$pass)` – scored against the planted
+`sim$truth`. See `vignette("simulation")` for a worked study.
+
 ## How the flagging works
 
 The detection signal lives in **multi-index agreement**, not any single
