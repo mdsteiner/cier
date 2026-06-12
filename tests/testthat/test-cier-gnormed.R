@@ -364,28 +364,48 @@ test_that("a two-option 0/1 declaration (min = 0, max = 1) scores (dichotomous b
                tolerance = 0)
 })
 
-test_that("a response outside the declared scale is a typed input error", {
+test_that("a response outside the declared scale is a plain input error, not a backend limit", {
   # The bridge zero-bases to 0..(Ncat - 1) and range-checks; a code above
   # `max` (or below `min`) is a data/contract violation, not silently
   # coerced. check_responses only rejects NaN/Inf, so this pins the bridge's own
-  # range guard.
+  # range guard. Crucially it is a PLAIN cier_error_input, NOT a backend limit:
+  # an out-of-range value is a genuine data defect that must keep propagating
+  # through cier_screen(), so the backend-limit subclass (reserved for
+  # otherwise-valid data the backend cannot score) must NOT be attached here --
+  # a mutant that tags both zero-base branches alike would wrongly let the screen
+  # swallow corrupt data.
   skip_if_not_installed("PerFit")
   m <- poly_matrix(n = 10L, p = 6L, seed = 32L)
   m[1L, 1L] <- 6                    # exceeds max = 5
-  expect_error(cier_gnormed(m, poly_items(6L)), class = "cier_error_input")
+  err <- tryCatch(cier_gnormed(m, poly_items(6L)), error = function(e) e)
+  expect_s3_class(err, "cier_error_input")
+  expect_false(inherits(err, "cier_error_backend_limit"))
 })
 
-test_that("data that does not span the declared scale is a typed input error", {
-  # PerFit needs both extreme categories present (min == 0, max == Ncat - 1 after
-  # zero-basing). Responses confined to 2..4 of a declared 1..5 scale never reach
-  # the extremes, so the bridge surfaces a typed error instead of PerFit's terse
-  # abort.
+test_that("data that does not span the declared scale is a screen-survivable backend limit", {
+  # PerFit's item-step popularities are undefined when a declared extreme category
+  # never occurs (min == 0, max == Ncat - 1 after zero-basing). Responses confined
+  # to 2..4 of a declared 1..5 scale never reach the extremes, so the bridge
+  # surfaces a typed error instead of PerFit's terse abort. This is OTHERWISE-VALID
+  # data the backend cannot score (sample-dependent, exactly like the
+  # heterogeneous-span and mokken-ceiling cases), NOT a metadata defect -- so the
+  # abort carries the cier_error_backend_limit subclass with a compact data$reason,
+  # and cier_screen() records Gnormed as skipped-with-reason instead of aborting
+  # the whole battery. It remains a cier_error_input for direct callers.
   skip_if_not_installed("PerFit")
   withr::with_seed(33L, {
     m <- matrix(sample(2:4, 30L * 6L, replace = TRUE), nrow = 30L, ncol = 6L)
   })
   storage.mode(m) <- "double"
-  expect_error(cier_gnormed(m, poly_items(6L)), class = "cier_error_input")
+  err <- tryCatch(cier_gnormed(m, poly_items(6L)), error = function(e) e)
+  expect_s3_class(err, "cier_error_input")
+  expect_s3_class(err, "cier_error_backend_limit")
+  # The exact compact reason is the screen's skip text (read via data$reason);
+  # pin it bytewise so a mutant with an empty / drifted reason is caught.
+  expect_identical(
+    cier_condition_data(err)$reason,
+    "sample does not attain both scale extremes (PerFit needs every end category observed)"
+  )
 })
 
 test_that("a fractional (non-integer) response is a typed input error", {

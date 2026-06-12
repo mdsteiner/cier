@@ -84,7 +84,11 @@ are undefined when a scale end never occurs, so the complete-case block must
 at least once somewhere in the sample. A perfectly valid dataset in which,
 say, nobody ever picked the top category raises a typed error rather than
 scoring -- check \code{max} / \code{min} against the data, or expect this on small
-samples with rarely-endorsed extreme categories.
+samples with rarely-endorsed extreme categories. Like the mixed-format case
+above, this is a \strong{backend limit} on otherwise-valid data, not a metadata
+mistake: the typed error carries the same dedicated subclass, so
+\code{\link[=cier_screen]{cier_screen()}} records Gnormed as skipped with that reason instead of
+aborting the battery.
 
 \strong{Abstention.} Because \code{\link[PerFit:Gnormed.poly]{PerFit::Gnormed.poly()}} needs complete data, a
 respondent with \strong{any} missing cell is excluded: both \code{value} and \code{flagged}

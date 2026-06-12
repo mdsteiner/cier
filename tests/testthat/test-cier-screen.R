@@ -451,6 +451,50 @@ test_that("a heterogeneous span skips Gnormed with a reason; the battery survive
                class = "cier_error_input")
 })
 
+test_that("an unattained scale extreme skips Gnormed with a reason; the battery survives", {
+  # A perfectly valid sample whose responses never reach a declared extreme
+  # category (here 1..4 responses on a declared 1..5 scale -- nobody picked the
+  # top option) leaves PerFit's item-step popularities undefined. That is
+  # otherwise-valid data the backend cannot score (sample-dependent, like the
+  # heterogeneous-span and mokken-ceiling cases), NOT a metadata defect -- so the
+  # screen records Gnormed as skipped-with-reason and every OTHER index still
+  # runs, instead of a plain input error aborting the whole battery (finding F07).
+  # Items are all FORWARD-keyed on purpose: a reverse-keyed item reflects
+  # (min + max) - x, which would map a 1..4 column to 5..2 and reintroduce the top
+  # category, masking the unattained extreme this test pins.
+  skip_if_not_installed("PerFit")
+  skip_if_not_installed("mokken")
+  x <- withr::with_seed(40L, {
+    matrix(sample.int(4L, 60L * 20L, replace = TRUE), nrow = 60L, ncol = 20L)
+  })
+  x[1L, 1L] <- 1                    # bottom category present...
+  x[1L, 2L] <- 4                    # ...top declared option (5) never occurs
+  storage.mode(x) <- "double"
+  it <- screen_items(reverse = rep(FALSE, 20L))   # declared max = 5; forward only
+  sc <- q(cier_screen(x, it,
+                      control = list(cier_personal_reliability = list(seed = 1))))
+  # Gnormed is the ONLY skip; the other nine indices ran.
+  expect_identical(sc$skipped$method, "cier_gnormed")
+  expect_match(sc$skipped$reason, "scale extremes", fixed = TRUE)
+  expect_identical(length(sc$indices), 9L)
+  expect_false("cier_gnormed" %in% names(sc$indices))
+  expect_false("cier_gnormed" %in% colnames(sc$flags))
+  # The catch path must leave the flag table intact: the nine survivors reach it
+  # and at least one backend survivor (Ht) actually SCORED -- pins that the screen
+  # genuinely survived, not merely listed the index (mirrors the mokken sibling's
+  # colnames check). Ht scores fine on 1..4 data (range 0..3, under its ceiling).
+  expect_identical(ncol(sc$flags), 9L)
+  expect_true("cier_ht" %in% colnames(sc$flags))
+  expect_true(any(is.finite(sc$indices$cier_ht$value)))
+  # A genuinely OUT-OF-RANGE Gnormed input (a value above the declared max) is a
+  # data defect, not a backend limit: it must still PROPAGATE through the screen,
+  # never be silently skipped -- so the skip path cannot over-broadly catch it.
+  x_oor <- x
+  x_oor[1L, 1L] <- 99               # forward column 1; exceeds declared max = 5
+  expect_error(cier_screen(x_oor, it, methods = "cier_gnormed"),
+               class = "cier_error_input")
+})
+
 # ---- Control forwarding ------------------------------------------------------
 
 test_that("a control override is forwarded to the index verbatim", {

@@ -961,6 +961,21 @@ validity (absent / NA / fractional / non-finite / below-bound `max`) is checked
 **before** homogeneity and stays a plain `cier_error_input`, so a genuine
 metadata defect still propagates through the screen.
 
+The **unattained-scale-extreme** abort in `personfit_zero_base()` is classified
+the same way (pre-release review, 2026-06-12; finding F07). `PerFit`'s
+item-step popularities are undefined when a declared end category never occurs in
+the sample, so a perfectly valid dataset in which (say) nobody ever picked the
+top option cannot be scored. That is otherwise-valid data the backend cannot
+score — sample-dependent, just as the span-homogeneity limit is format-dependent
+— not a metadata defect, so the abort now carries the
+`cier_error_backend_limit` subclass with `data$reason = "sample does not attain
+both scale extremes (PerFit needs every end category observed)"`, and
+`cier_screen()` records Gnormed as skipped-with-reason instead of letting the
+plain `cier_error_input` abort the ten-index battery. The **out-of-range** branch
+(a cell below `min` or above `max` after zero-basing — a 99 sentinel, a wrong
+`max`) is checked first and stays a plain `cier_error_input`, so a genuine data
+defect still propagates through the screen rather than being silently skipped.
+
 ## Mixed response formats: documented caveats, no automatic remediation
 
 The screen's documentation now lists the battery and adds a mixed-format

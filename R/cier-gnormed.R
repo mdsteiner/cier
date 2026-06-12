@@ -57,7 +57,11 @@
 #' at least once somewhere in the sample. A perfectly valid dataset in which,
 #' say, nobody ever picked the top category raises a typed error rather than
 #' scoring -- check `max` / `min` against the data, or expect this on small
-#' samples with rarely-endorsed extreme categories.
+#' samples with rarely-endorsed extreme categories. Like the mixed-format case
+#' above, this is a **backend limit** on otherwise-valid data, not a metadata
+#' mistake: the typed error carries the same dedicated subclass, so
+#' [cier_screen()] records Gnormed as skipped with that reason instead of
+#' aborting the battery.
 #'
 #' **Abstention.** Because [PerFit::Gnormed.poly()] needs complete data, a
 #' respondent with **any** missing cell is excluded: both `value` and `flagged`

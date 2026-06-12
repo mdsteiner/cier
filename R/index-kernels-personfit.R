@@ -52,9 +52,13 @@ assert_integer_responses <- function(responses, statistic, call) {
 # cell must lie in 0..(Ncat-1), AND the block must ATTAIN both extremes (its
 # popularity estimates are undefined if the lowest or highest category never
 # occurs). The caller passes a complete-case block, so there are no NAs; the
-# whole-number contract is enforced earlier by assert_integer_responses(). Either
-# violation is a typed cier_error_input -- converting PerFit's terse abort into a
-# package condition -- rather than a silent shift or a cryptic upstream stop().
+# whole-number contract is enforced earlier by assert_integer_responses(). Both
+# violations convert PerFit's terse abort into a typed package condition (rather
+# than a silent shift or a cryptic upstream stop()), but they are classified
+# differently: an out-of-range cell is a genuine data defect (plain
+# cier_error_input that propagates through cier_screen()), while an unused scale
+# extreme is otherwise-valid data the backend cannot score (additionally tagged
+# cier_error_backend_limit, so the screen skips-with-reason).
 personfit_zero_base <- function(block, mins, ncat, call) {
   m <- sweep(block, 2L, mins)
   rng <- range(m)
@@ -70,15 +74,29 @@ personfit_zero_base <- function(block, mins, ncat, call) {
     )
   }
   if (rng[[1L]] > 0L || rng[[2L]] < ncat - 1L) {
+    # Unlike the out-of-range branch above (a genuine data/metadata defect), an
+    # unused extreme is a property of an OTHERWISE-VALID sample the PerFit backend
+    # cannot score -- the popularity estimates are undefined when a scale end
+    # never occurs. So this carries the cier_error_backend_limit subclass with a
+    # compact data$reason (mirroring the heterogeneous-span and mokken-ceiling
+    # siblings), letting cier_screen() record Gnormed as skipped-with-reason
+    # instead of aborting the whole battery; a direct cier_gnormed() call still
+    # gets the cier_error_input with the remedy spelled out.
     cier_abort(
-      "cier_error_input",
+      c("cier_error_backend_limit", "cier_error_input"),
       c("The responses must use the full declared scale: the lowest and highest \\
          of the {ncat} categories must each occur at least once.",
         "x" = "Observed zero-based range: {.val {rng}} (need {.val {0L}} and \\
                {.val {ncat - 1L}}).",
         "i" = "Check {.field max} / {.field min}, or that the sample spans \\
                every category (PerFit cannot score a scale with an unused end)."),
-      data = list(arg = "responses", observed = rng, ncat = ncat),
+      data = list(
+        arg = "responses", observed = rng, ncat = ncat,
+        reason = paste0(
+          "sample does not attain both scale extremes ",
+          "(PerFit needs every end category observed)"
+        )
+      ),
       call = call
     )
   }
