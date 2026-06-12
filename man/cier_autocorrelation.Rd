@@ -22,10 +22,13 @@ administration order. \code{NA} marks a missing response.}
 \code{1}.}
 
 \item{max_lag}{Positive whole number or \code{NULL}. The largest lag to evaluate.
-\code{NULL} (default) resolves to \code{ncol(responses) - 3}. An explicit value must
-satisfy \verb{min_lag <= max_lag <= ncol(responses) - 3}. The default is sized
-from the full column count even when \code{na_rm = TRUE}, so a heavily missing
-row may have its higher lags abstain once its responses are stripped.}
+\code{NULL} (default) resolves to \code{min(ncol(responses) - 3, 10)} -- capped at the
+low lags Gottfried et al. recommend, since the full \code{ncol(responses) - 3}
+range saturates short high-lag slices to 1 on a long battery. An explicit
+value must satisfy \verb{min_lag <= max_lag <= ncol(responses) - 3} (the cap
+applies to the default only). The default is sized from the full column
+count even when \code{na_rm = TRUE}, so a heavily missing row may have its higher
+lags abstain once its responses are stripped.}
 
 \item{na_rm}{Single \code{TRUE} / \code{FALSE}. When \code{TRUE}, each row's missing
 responses are stripped before lagging; when \code{FALSE} (default) missingness is
@@ -66,12 +69,14 @@ relative, not absolute criteria"). Adjust the target tail with \code{fpr}, or pa
 an absolute \code{cutoff} in \verb{[0, 1]} to flag on a literal autocorrelation
 magnitude; \code{fpr} and \code{cutoff} are mutually exclusive.
 
-\strong{Lag range.} \code{max_lag = NULL} resolves to \code{ncol(responses) - 3}, the
-\code{rp.acors()} default (the largest lag whose slice still holds three
-observations). On a long instrument this includes many short, high-lag slices
-whose correlation saturates near 1; Gottfried et al. recommend restricting
-attention to a handful of low lags (roughly 5-12) on runs of 10-40 items, so
-set \code{max_lag} (and \code{min_lag}) deliberately for a long battery.
+\strong{Lag range.} \code{max_lag = NULL} resolves to \code{min(ncol(responses) - 3, 10)} --
+the low lags Gottfried et al. recommend (roughly 5-12 on runs of 10-40 items),
+capped at 10. The full \code{ncol(responses) - 3} range (the \code{rp.acors()} default:
+the largest lag whose slice still holds three observations) adds many short,
+high-lag slices whose correlation saturates near 1 on a long battery, flagging
+far more than the target rate; the cap keeps the default in the recommended
+band. An explicit \code{max_lag} may still reach \code{ncol(responses) - 3} (the cap is
+default-only), so set \code{max_lag} and \code{min_lag} deliberately for a long battery.
 
 \strong{Zero-variance convention.} A lag whose slice is constant (a straightliner)
 has an undefined correlation; following \code{rp.acors()} it scores \code{1} -- the top
@@ -80,11 +85,17 @@ returns \code{NaN}). A straightliner is therefore \strong{flagged}, not dropped.
 
 \strong{Missing data.} With \code{na_rm = FALSE} (default) missingness is handled
 pairwise within each lag (a missing cell drops only the lagged pairs it
-touches). With \code{na_rm = TRUE} each row's missing responses are removed before
-lagging; this collapses the administration-order spacing the index depends on
-and is rarely appropriate. A respondent with no scorable lag (every lag has
-too few observations) abstains: both \code{value} and \code{flagged} are \code{NA} and the
-row is excluded from the flag count and rate.
+touches). A lag whose pairwise-complete subset holds fewer than three pairs
+abstains for that lag -- a two-pair correlation is \verb{+/-1} by construction, so
+without this guard an early dropout would be deterministically flagged. Heavy
+per-row missingness therefore inflates the few surviving correlations toward 1
+and, once too few lags remain scorable, the respondent abstains entirely (both
+\code{value} and \code{flagged} are \code{NA}, and the row is excluded from the flag count and
+rate). Treat scores from rows with many missing items cautiously; a
+minimum-answered-items screen before this index is recommended. With
+\code{na_rm = TRUE} each row's missing responses are removed before lagging; this
+collapses the administration-order spacing the index depends on and is rarely
+appropriate.
 
 \strong{Assumptions.} The index reads the response columns as an ordered sequence
 on a common response scale, so it is meaningful only when the columns are in
@@ -106,12 +117,14 @@ responding, whose autocorrelation is near zero.
 
 \examples{
 # The 44 BFI items are the first 44 columns of the bundled example data.
-# Restrict to low lags (the paper's recommendation): the default
-# max_lag = ncol - 3 includes short high-lag slices whose correlation
-# saturates near 1 on a long battery, flagging far more than the target rate.
-out <- cier_autocorrelation(bfi_careless[, 1:44], max_lag = 8L)
+# max_lag defaults to min(ncol - 3, 10) = 10 here -- the low-lag range
+# Gottfried et al. recommend; the full ncol - 3 = 41 would add short high-lag
+# slices that saturate near 1, flagging far more than the target rate.
+out <- cier_autocorrelation(bfi_careless[, 1:44])
 out
 head(as.data.frame(out))
+# Restrict further to a handful of low lags:
+cier_autocorrelation(bfi_careless[, 1:44], max_lag = 6L)
 }
 \references{
 Gottfried, J., Jezek, S., Kralova, M., & Rihacek, T. (2022). Autocorrelation

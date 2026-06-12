@@ -83,16 +83,35 @@ test_that("oracle parity holds with explicit min_lag / max_lag", {
                tolerance = 1e-10)
 })
 
-test_that("max_lag defaults to ncol - 3 (off-by-one default is caught)", {
-  # Non-saturating continuous data so the boundary lag actually moves the max:
-  # dropping lag ncol-3 (a ncol-4 default) changes 14 of 40 rows here.
+test_that("max_lag defaults to min(ncol - 3, 10) (cap and off-by-one caught)", {
+  # D4: the default caps the lag window at 10 (Gottfried et al.'s low-lag range);
+  # the full ncol - 3 saturates short high-lag slices to 1 on long batteries.
+  # Continuous non-saturating data so the boundary lags actually move the max.
+  # p = 15 -> ncol - 3 = 12 > 10, so the cap binds: the default is 10, not 12.
   withr::with_seed(5L, x <- matrix(stats::runif(40L * 15L, 1, 5), nrow = 40L))
   v_default <- cier_autocorrelation(x)$value
-  expect_equal(v_default, cier_autocorrelation(x, max_lag = ncol(x) - 3L)$value,
-               tolerance = 1e-12)                       # default == ncol - 3
-  dropped <- cier_autocorrelation(x, max_lag = ncol(x) - 4L)$value
-  expect_false(isTRUE(all.equal(v_default, dropped)))
+  expect_equal(v_default, cier_autocorrelation(x, max_lag = 10L)$value,
+               tolerance = 1e-12)                       # default == 10 (the cap)
+  # Off-by-one on either side moves the result: dropping lag 10 (max_lag = 9) and
+  # reaching ncol - 3 = 12 (cap not applied) both differ from the capped default.
+  expect_false(isTRUE(all.equal(v_default,
+                                cier_autocorrelation(x, max_lag = 9L)$value)))
+  expect_false(isTRUE(all.equal(v_default,
+                                cier_autocorrelation(x, max_lag = 12L)$value)))
   expect_equal(v_default, ref_autocorrelation_value(x), tolerance = 1e-10)
+
+  # The cap is a min(), not a floor: when ncol - 3 <= 10 it stays the default,
+  # so p - 3 is still reachable. p = 12 -> default == ncol - 3 == 9.
+  withr::with_seed(6L, x2 <- matrix(stats::runif(30L * 12L, 1, 5), nrow = 30L))
+  expect_equal(cier_autocorrelation(x2)$value,
+               cier_autocorrelation(x2, max_lag = 9L)$value, tolerance = 1e-12)
+  expect_equal(cier_autocorrelation(x2)$value,
+               ref_autocorrelation_value(x2), tolerance = 1e-10)
+  # The default never resolves ABOVE ncol - 3: an explicit max_lag = 10 is
+  # illegal at p = 12 (10 > 9), which pins out a min(ncol - 2, 10) off-by-one
+  # that would otherwise hide behind the slice-too-short guard.
+  expect_error(cier_autocorrelation(x2, max_lag = 10L),
+               class = "cier_error_input")
 })
 
 test_that("min_lag defaults to 1 (lag 1 is included)", {
@@ -157,7 +176,9 @@ test_that("scattered-NA rows match the oracle on both NA paths", {
 test_that("cier_autocorrelation matches rp.acors on complete data (na_rm FALSE)", {
   skip_if_not_installed("responsePatterns")
   x <- ac_fixture(n = 20L, p = 30L, seed = 7L)
-  ours <- suppressWarnings(cier_autocorrelation(x))$value
+  # rp.acors()'s own default max_lag is ncol - 3 (cier caps the default at 10 per
+  # D4), so the parity pins the shared statistic at rp.acors's range explicitly.
+  ours <- suppressWarnings(cier_autocorrelation(x, max_lag = ncol(x) - 3L))$value
   rp <- suppressMessages(
     responsePatterns::rp.acors(as.data.frame(x), na.rm = FALSE)
   )
@@ -236,6 +257,84 @@ test_that("a wholly abstaining matrix warns and flags nobody", {
   expect_true(all(is.na(out$flagged)))
 })
 
+# ---- D5: per-lag minimum is 3 complete pairs (dropouts abstain, no spurious 1) -
+
+test_that("a sparse dropout row abstains (every lag has < 3 complete pairs)", {
+  # F12 regression: under pairwise NA handling a respondent who answered only a
+  # few scattered items has no lag with 3 complete pairs, so every lag abstains
+  # and the row scores NA -- it must NOT be sent to 1.0 by a 2-pair slice. Six of
+  # 44 items answered at {1, 2, 20, 21, 40, 43}: the largest complete-pair count
+  # over lags 1..10 is 2 (lag 1), so under D5 every lag abstains.
+  dropout <- rep(NA_real_, 44L)
+  dropout[c(1L, 2L, 20L, 21L, 40L, 43L)] <- c(2, 5, 1, 4, 3, 5)   # varied, not const
+  # Embed among healthy rows so the percentile cutoff still resolves (>= 20
+  # scored) and the dropout's non-flag is meaningful.
+  healthy <- ac_fixture(n = 25L, p = 44L, seed = 14L)
+  m <- rbind(dropout, healthy)
+  out <- suppressWarnings(cier_autocorrelation(m, max_lag = 10L))
+  expect_true(is.na(out$value[[1L]]))            # abstains, not 1.0
+  expect_true(is.na(out$flagged[[1L]]))
+  expect_false(anyNA(out$value[-1L]))            # healthy rows still score
+  expect_equal(out$value, ref_autocorrelation_value(m, max_lag = 10L),
+               tolerance = 1e-10)
+})
+
+test_that("a 2-complete-pair lag no longer saturates the score to 1", {
+  # F12 regression with the review's numbers: an early-dropout row answering the
+  # first 6 of 44 items has exactly 2 complete pairs at lag 4 ((1,5) and (2,6)),
+  # whose correlation is +/-1 by construction -- the spurious saturation. Lags
+  # 1-3 keep 5/4/3 complete pairs, so the row still scores, but below 1.
+  dropout <- rep(NA_real_, 44L)
+  dropout[1:6] <- c(1, 4, 2, 5, 3, 1)
+  naive_lag4 <- stats::cor(c(dropout[[1L]], dropout[[2L]]),
+                           c(dropout[[5L]], dropout[[6L]]))
+  expect_equal(abs(naive_lag4), 1)               # the 2-pair slice IS +/-1
+  v <- suppressWarnings(
+    cier_autocorrelation(matrix(dropout, nrow = 1L), max_lag = 10L)
+  )$value[[1L]]
+  expect_false(is.na(v))                         # lags 1-3 still score it
+  expect_true(v < 1)                             # but the spurious 1.0 is gone
+  expect_equal(
+    v,
+    ref_autocorrelation_value(matrix(dropout, nrow = 1L), max_lag = 10L)[[1L]],
+    tolerance = 1e-10
+  )
+})
+
+test_that("D5 leaves the straightliner zero-variance convention intact", {
+  # Zero-variance precedence (signed off): a lag slice that is constant over its
+  # non-NA cells still scores 1 even when it has only 2 complete pairs -- the
+  # straightliner convention wins over the < 3-pairs guard. The lag-1 slice of
+  # c(5, 5, NA, 5, 7) has row1 = (5, 5, NA, 5) (var 0 -> zero-variance) and 2
+  # complete pairs ((1) and (4)); a "pairs-guard-first" mutant would return NA.
+  zv <- matrix(c(5, 5, NA, 5, 7), nrow = 1L)
+  v <- suppressWarnings(cier_autocorrelation(zv, max_lag = 1L))$value[[1L]]
+  expect_identical(v, 1)                            # zero-variance wins, NOT NA
+  expect_equal(v, ref_autocorrelation_value(zv, max_lag = 1L)[[1L]],
+               tolerance = 1e-12)
+})
+
+# ---- D4: the default lag window controls the bundled-data flag rate (F11) ----
+
+test_that("the default max_lag flags ~5% of bfi_careless, not ~32% (F11)", {
+  # F11/F48 regression with the review's numbers: at the old default ncol - 3 the
+  # short high-lag slices saturate |ac| to 1, flagging 126/394 (32%) and tripping
+  # the saturation diagnostic; the new default min(ncol - 3, 10) flags 20/394
+  # (~5%) with a representative cutoff and no saturation warning.
+  bfi <- as.matrix(bfi_careless[, 1:44])
+  storage.mode(bfi) <- "double"
+
+  expect_no_warning(default <- cier_autocorrelation(bfi),  # max_lag = min(41, 10)
+                    class = "cier_warning_saturated_cutoff")
+  expect_equal(default$cutoff, 0.9061, tolerance = 1e-3)
+  expect_identical(sum(default$flagged, na.rm = TRUE), 20L)        # ~5% of 394
+
+  # Assign INSIDE expect_warning: it returns the captured condition, not value.
+  expect_warning(old <- cier_autocorrelation(bfi, max_lag = 44L - 3L),
+                 class = "cier_warning_saturated_cutoff")
+  expect_identical(sum(old$flagged, na.rm = TRUE), 126L)          # ~32% of 394
+})
+
 # ---- Lag-window edges -------------------------------------------------------
 
 test_that("p = 4 works with the default max_lag (= 1) and matches the oracle", {
@@ -249,9 +348,17 @@ test_that("p = 4 works with the default max_lag (= 1) and matches the oracle", {
   expect_equal(out$value, ref_autocorrelation_value(x), tolerance = 1e-10)
 })
 
-test_that("fewer than four columns is a typed input error", {
+test_that("fewer than four items errors on the item count, not max_lag", {
+  # F14/F40: a battery with no usable lag must blame the item count, not a
+  # max_lag the user never supplied (a lag-1 slice of < 4 columns holds < 3
+  # responses). The friendly guard fires before the default max_lag resolves.
   x <- ac_fixture(n = 5L, p = 3L)
-  expect_error(cier_autocorrelation(x), class = "cier_error_input")
+  err <- tryCatch(cier_autocorrelation(x),
+                  cier_error_input = function(e) e)
+  expect_s3_class(err, "cier_error_input")
+  msg <- cli::ansi_strip(conditionMessage(err))
+  expect_match(msg, "at least 4 items", fixed = TRUE)
+  expect_no_match(msg, "max_lag", fixed = TRUE)         # never blames the knob
 })
 
 test_that("an unreconcilable lag range is a typed input error", {

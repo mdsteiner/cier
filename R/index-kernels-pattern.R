@@ -15,13 +15,20 @@
 # `row1_mat` / `row2_mat` are the n x (p - lag) lag slices (columns 1..(p-lag)
 # and (1+lag)..p of the response matrix). Returns the per-respondent
 # autocorrelation for this lag following the responsePatterns::rp.acors()
-# decision tree:
+# decision tree, with the D5 minimum-pairs guard:
 #   * a slice with fewer than two non-NA elements -> NA;
 #   * a zero-variance slice (constant over its non-NA elements) -> 1 (NOT the
 #     acf() NaN; a straightliner is deliberately sent to the top of the tail);
-#   * fewer than two complete (both-present) pairs -> NA;
+#   * else fewer than THREE complete (both-present) pairs -> NA (D5: a 2-pair
+#     correlation is +/-1 by construction, which was deterministically flagging
+#     early dropouts; raised from rp.acors's 2-pair floor, recorded in
+#     TOLERANCES.md). The zero-variance branch above takes PRECEDENCE, so a
+#     constant slice still scores 1 even with fewer than three complete pairs;
 #   * else the pairwise-complete Pearson correlation.
-# The zero-variance test uses the FULL non-NA slice (matching
+# Only the pairwise (na_rm = FALSE) path can reach < 3 complete pairs; on
+# complete data every lag has p - lag >= 3 pairs (the slice-too-short guard), so
+# D5 is a no-op there and the rp.acors / oracle parity on complete data is
+# unchanged. The zero-variance test uses the FULL non-NA slice (matching
 # var(slice, na.rm = TRUE)), distinct from the paired-complete subset the
 # correlation is summed over. The correlation is a masked-sum Pearson (the
 # kernel_person_total technique): one set of rowSums replaces a per-row cor()
@@ -47,9 +54,11 @@ autocorrelation_lag <- function(row1_mat, row2_mat) {
   vp2 <- (n_pairs * rowSums(r2 * r2) - s2 * s2) / denom
   ac <- cov12 / sqrt(vp1 * vp2)
   na_slice <- is.na(v1) | is.na(v2)
+  zero_var <- !na_slice & (v1 == 0 | v2 == 0)      # clean logical (no NA)
   ac[na_slice] <- NA_real_
-  ac[!na_slice & (v1 == 0 | v2 == 0)] <- 1         # zero-variance -> 1
-  ac[!is.finite(ac)] <- NA_real_                   # too-few-pairs / degenerate
+  ac[zero_var] <- 1                                # zero-variance -> 1 (precedence)
+  ac[!is.finite(ac)] <- NA_real_                   # 0/1-pair degenerate
+  ac[n_pairs < 3L & !zero_var] <- NA_real_         # D5: < 3 complete pairs -> NA
   ac
 }
 

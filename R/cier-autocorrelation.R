@@ -10,15 +10,31 @@
 #     (percentile method, upper direction, fpr = 0.05 by default).
 
 # Resolve and validate the lag range against the item count. `max_lag = NULL`
-# defaults to `n_items - 3` (the rp.acors() default: the largest lag whose slice
-# still holds three observations). An explicit lag range must satisfy
-# `1 <= min_lag <= max_lag <= n_items - 3`, else a typed input error -- so a
-# battery with fewer than four items (no valid lag) also fails here, at the
-# boundary, before the kernel runs.
+# defaults to `min(n_items - 3, 10)` (D4): the low lags Gottfried et al.
+# recommend, capped so a long battery's short high-lag slices do not saturate the
+# score. `n_items - 3` (the rp.acors() default: the largest lag whose slice still
+# holds three observations) stays the default when it is <= 10, and an explicit
+# `max_lag` may still reach it -- the cap is default-only. An explicit lag range
+# must satisfy `1 <= min_lag <= max_lag <= n_items - 3`, else a typed input error.
+# A battery with fewer than four items has no valid lag, so it fails first with a
+# friendly item-count error (not a cryptic complaint about a `max_lag` the user
+# never set), before the default resolves.
 resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
   check_count(min_lag, "min_lag", call = call)
+  if (n_items < 4L) {
+    cier_abort(
+      "cier_error_input",
+      c("{.fn cier_autocorrelation} needs at least 4 items.",
+        "x" = "Got {n_items} item{?s}; the shortest lag (lag 1) then leaves a \\
+               slice of {n_items - 1L}, but an autocorrelation needs at least 3.",
+        "i" = "Score each same-format block separately, or use a different index \\
+               on a very short scale."),
+      data = list(arg = "responses", observed = n_items, expected = 4L),
+      call = call
+    )
+  }
   if (is.null(max_lag)) {
-    max_lag <- n_items - 3L
+    max_lag <- min(n_items - 3L, 10L)
   }
   check_count(max_lag, "max_lag", call = call)
   min_lag <- as.integer(min_lag)
@@ -59,12 +75,14 @@ resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
 #' an absolute `cutoff` in `[0, 1]` to flag on a literal autocorrelation
 #' magnitude; `fpr` and `cutoff` are mutually exclusive.
 #'
-#' **Lag range.** `max_lag = NULL` resolves to `ncol(responses) - 3`, the
-#' `rp.acors()` default (the largest lag whose slice still holds three
-#' observations). On a long instrument this includes many short, high-lag slices
-#' whose correlation saturates near 1; Gottfried et al. recommend restricting
-#' attention to a handful of low lags (roughly 5-12) on runs of 10-40 items, so
-#' set `max_lag` (and `min_lag`) deliberately for a long battery.
+#' **Lag range.** `max_lag = NULL` resolves to `min(ncol(responses) - 3, 10)` --
+#' the low lags Gottfried et al. recommend (roughly 5-12 on runs of 10-40 items),
+#' capped at 10. The full `ncol(responses) - 3` range (the `rp.acors()` default:
+#' the largest lag whose slice still holds three observations) adds many short,
+#' high-lag slices whose correlation saturates near 1 on a long battery, flagging
+#' far more than the target rate; the cap keeps the default in the recommended
+#' band. An explicit `max_lag` may still reach `ncol(responses) - 3` (the cap is
+#' default-only), so set `max_lag` and `min_lag` deliberately for a long battery.
 #'
 #' **Zero-variance convention.** A lag whose slice is constant (a straightliner)
 #' has an undefined correlation; following `rp.acors()` it scores `1` -- the top
@@ -73,11 +91,17 @@ resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
 #'
 #' **Missing data.** With `na_rm = FALSE` (default) missingness is handled
 #' pairwise within each lag (a missing cell drops only the lagged pairs it
-#' touches). With `na_rm = TRUE` each row's missing responses are removed before
-#' lagging; this collapses the administration-order spacing the index depends on
-#' and is rarely appropriate. A respondent with no scorable lag (every lag has
-#' too few observations) abstains: both `value` and `flagged` are `NA` and the
-#' row is excluded from the flag count and rate.
+#' touches). A lag whose pairwise-complete subset holds fewer than three pairs
+#' abstains for that lag -- a two-pair correlation is `+/-1` by construction, so
+#' without this guard an early dropout would be deterministically flagged. Heavy
+#' per-row missingness therefore inflates the few surviving correlations toward 1
+#' and, once too few lags remain scorable, the respondent abstains entirely (both
+#' `value` and `flagged` are `NA`, and the row is excluded from the flag count and
+#' rate). Treat scores from rows with many missing items cautiously; a
+#' minimum-answered-items screen before this index is recommended. With
+#' `na_rm = TRUE` each row's missing responses are removed before lagging; this
+#' collapses the administration-order spacing the index depends on and is rarely
+#' appropriate.
 #'
 #' **Assumptions.** The index reads the response columns as an ordered sequence
 #' on a common response scale, so it is meaningful only when the columns are in
@@ -101,10 +125,13 @@ resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
 #' @param min_lag Positive whole number. The smallest lag to evaluate. Default
 #'   `1`.
 #' @param max_lag Positive whole number or `NULL`. The largest lag to evaluate.
-#'   `NULL` (default) resolves to `ncol(responses) - 3`. An explicit value must
-#'   satisfy `min_lag <= max_lag <= ncol(responses) - 3`. The default is sized
-#'   from the full column count even when `na_rm = TRUE`, so a heavily missing
-#'   row may have its higher lags abstain once its responses are stripped.
+#'   `NULL` (default) resolves to `min(ncol(responses) - 3, 10)` -- capped at the
+#'   low lags Gottfried et al. recommend, since the full `ncol(responses) - 3`
+#'   range saturates short high-lag slices to 1 on a long battery. An explicit
+#'   value must satisfy `min_lag <= max_lag <= ncol(responses) - 3` (the cap
+#'   applies to the default only). The default is sized from the full column
+#'   count even when `na_rm = TRUE`, so a heavily missing row may have its higher
+#'   lags abstain once its responses are stripped.
 #' @param na_rm Single `TRUE` / `FALSE`. When `TRUE`, each row's missing
 #'   responses are stripped before lagging; when `FALSE` (default) missingness is
 #'   handled pairwise within each lag.
@@ -132,12 +159,14 @@ resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
 #' @export
 #' @examples
 #' # The 44 BFI items are the first 44 columns of the bundled example data.
-#' # Restrict to low lags (the paper's recommendation): the default
-#' # max_lag = ncol - 3 includes short high-lag slices whose correlation
-#' # saturates near 1 on a long battery, flagging far more than the target rate.
-#' out <- cier_autocorrelation(bfi_careless[, 1:44], max_lag = 8L)
+#' # max_lag defaults to min(ncol - 3, 10) = 10 here -- the low-lag range
+#' # Gottfried et al. recommend; the full ncol - 3 = 41 would add short high-lag
+#' # slices that saturate near 1, flagging far more than the target rate.
+#' out <- cier_autocorrelation(bfi_careless[, 1:44])
 #' out
 #' head(as.data.frame(out))
+#' # Restrict further to a handful of low lags:
+#' cier_autocorrelation(bfi_careless[, 1:44], max_lag = 6L)
 cier_autocorrelation <- function(responses, min_lag = 1L, max_lag = NULL,
                                  na_rm = FALSE, fpr = NULL, cutoff = NULL) {
   call <- rlang::caller_env()

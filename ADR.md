@@ -492,6 +492,45 @@ deliberate change recorded in `TOLERANCES.md`. The docs' "flags `fpr` by
 construction" wording was corrected package-wide to "flags **at least** `fpr`; more
 when scores tie at the cutoff".
 
+## Autocorrelation defaults and missing data (D4/D5, release review 2026-06-12)
+
+`cier_autocorrelation`'s default lag range and its pairwise-NA handling each let
+attentive respondents flag at the target rate or worse on realistic data. Two
+signed-off changes fix that; the statistic on complete data is unchanged:
+
+- **D4 -- default `max_lag = min(ncol - 3, 10)`.** The previous default, `ncol - 3`
+  (the `rp.acors()` default), evaluates many short, high-lag slices whose
+  correlation saturates near 1 on a long battery: on the bundled
+  `bfi_careless[, 1:44]` it flagged 126 / 394 (32%) and tripped the D7 saturation
+  diagnostic. Gottfried et al. (2022) recommend a handful of low lags (~5-12 on
+  10-40 items); the cap of 10 keeps the default in that band (the same data now
+  flags 20 / 394, ~5%, no saturation). `ncol - 3` stays the default when it is
+  <= 10 and remains reachable explicitly -- the cap is default-only, so an explicit
+  `max_lag` may still reach `ncol - 3`. A friendly item-count error (F14/F40) now
+  fires for `ncol < 4` before the default resolves, instead of the cryptic
+  complaint about a `max_lag` the user never set.
+
+- **D5 -- per-lag minimum 3 complete pairs.** Under pairwise NA handling
+  (`na_rm = FALSE`) a lag slice with only two complete (both-present) pairs has a
+  correlation of +/-1 by construction, so an early dropout was deterministically
+  sent to the top of the tail (F12). The kernel now abstains a lag with fewer than
+  three complete pairs (raised from `rp.acors`'s two-pair floor), mirroring the
+  existing slice-length >= 3 rule. The zero-variance -> 1 straightliner convention
+  takes **precedence**: a slice constant over its non-NA cells still scores 1 even
+  with fewer than three complete pairs. Only the pairwise path can reach < 3
+  complete pairs; on complete data every evaluated lag has `ncol - lag >= 3` pairs,
+  so D5 is a no-op there and the `rp.acors` / oracle parity on complete data is
+  unchanged (1e-10). This is a recorded deviation from `responsePatterns` and the
+  pre-review kernel; the independent oracle (`ref-autocorrelation-gottfried2022.R`)
+  and `TOLERANCES.md` carry it. The `na_rm = TRUE` path is unchanged: after
+  stripping a row's NAs the complete pairs equal the slice length, already >= 3 by
+  the slice-too-short guard.
+
+The oracle's convenience default mirrors the wrapper's `min(ncol - 3, 10)` so
+default-vs-oracle parity tests compare at the same range; the exact default formula
+is pinned independently by the wrapper's hard-coded explicit-lag self-comparison
+(it never resolves above `ncol - 3`).
+
 ## Agreement diagnostic: observed co-occurrence vs a Poisson-binomial null
 
 Because an empirical-percentile cutoff flags at least its target rate by

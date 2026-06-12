@@ -174,6 +174,19 @@ external parity partner (verified 2026-06-10: no CRAN package implements Laz.R,
 and the timing / direct counting rules are trivial) -- they are oracle-only trust
 like PR / RPR.
 
+**Autocorrelation per-lag minimum pairs (D5, release review 2026-06-12).** The
+kernel and its independent oracle abstain a `na_rm = FALSE` lag whose
+pairwise-complete subset has fewer than **three** pairs (a two-pair correlation is
++/-1 by construction; raised from `responsePatterns`'s two-pair floor, which
+deterministically flagged early dropouts). The zero-variance -> 1 straightliner
+convention takes precedence, so a constant slice still scores 1. This is a
+deliberate deviation from `responsePatterns`, recorded in `ADR.md`
+("Autocorrelation defaults and missing data"). It bites only NA-bearing rows: on
+complete data every evaluated lag has `ncol - lag >= 3` complete pairs, so the two
+complete-data autocorrelation parity rows above (oracle and `rp.acors`, 1e-10) are
+unchanged. The default `max_lag` also changed to `min(ncol - 3, 10)` (D4), but the
+per-row max-abs-ac at a fixed lag range is unaffected.
+
 The Laz.R oracle encodes the wrapper's two signed-off conventions, so the
 parity holds on every row: **drop-NA** (a transition with a missing endpoint is
 dropped and the denominator is the count of valid transitions, not `N - 1` --

@@ -18,20 +18,32 @@
 #     v1 <- var(row1, na.rm = TRUE);  v2 <- var(row2, na.rm = TRUE)
 #     if (is.na(v1) || is.na(v2))     ac <- NA    # < 2 non-NA in a slice
 #     else if (v1 == 0 || v2 == 0)    ac <- 1     # zero-variance -> 1 (NOT acf)
+#     else if (#complete pairs < 3)   ac <- NA    # D5: a 2-pair cor is +/-1
 #     else ac <- cor(row1, row2, use = "pairwise.complete.obs")
 # Per respondent: value = max(|ac|) over lags; NA when every lag is NA.
+#
+# Default lag range (D4, release review 2026-06-12): `max_lag = NULL` resolves to
+# `min(p - 3, 10)` -- the low lags Gottfried et al. recommend -- mirroring the
+# wrapper's default so default-vs-oracle parity tests compare at the same range
+# (the exact formula is pinned independently by the wrapper's default test).
 #
 # NA convention (signed off this slice): `na_rm = FALSE` handles missingness
 # PAIRWISE (a missing cell drops only the lagged pairs it touches), matching
 # `responsePatterns` 0.3.x -- NOT the harsher / buggy 0.1.1 behaviour. The
 # zero-variance check uses the FULL non-NA slice (`na.rm = TRUE`), distinct from
-# the paired-complete subset the correlation is computed over.
+# the paired-complete subset the correlation is computed over. D5 (release review
+# 2026-06-12): a lag whose pairwise-complete subset has fewer than 3 pairs
+# abstains (NA) -- a 2-pair correlation is +/-1 by construction -- but a
+# zero-variance slice still scores 1 first (the straightliner convention wins).
+# Only the `na_rm = FALSE` pairwise path can reach < 3 complete pairs: under
+# `na_rm = TRUE` the row is compacted to non-NA cells first, so complete pairs
+# equal the slice length, already >= 3 by the slice-too-short guard.
 
 ref_autocorrelation_row <- function(row, min_lag = 1L, max_lag = NULL,
                                     na_rm = FALSE) {
   p <- length(row)
   if (is.null(max_lag)) {
-    max_lag <- p - 3L
+    max_lag <- min(p - 3L, 10L)
   }
   min_lag <- as.integer(min_lag)
   max_lag <- as.integer(max_lag)
@@ -54,6 +66,8 @@ ref_autocorrelation_row <- function(row, min_lag = 1L, max_lag = NULL,
       per_lag[[k]] <- NA_real_
     } else if (v1 == 0 || v2 == 0) {
       per_lag[[k]] <- 1
+    } else if (sum(!is.na(row1) & !is.na(row2)) < 3L) {
+      per_lag[[k]] <- NA_real_       # D5: < 3 complete pairs (cor would be +/-1)
     } else {
       per_lag[[k]] <- suppressWarnings(
         stats::cor(row1, row2, method = "pearson",
@@ -73,7 +87,7 @@ ref_autocorrelation <- function(x, min_lag = 1L, max_lag = NULL,
     x <- as.matrix(x)
   }
   if (is.null(max_lag)) {
-    max_lag <- ncol(x) - 3L
+    max_lag <- min(ncol(x) - 3L, 10L)
   }
   lapply(seq_len(nrow(x)),
          function(i) ref_autocorrelation_row(x[i, ], min_lag, max_lag, na_rm))
