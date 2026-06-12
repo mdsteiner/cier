@@ -184,15 +184,16 @@ close. cier ships the **parameter-free** elbow (no sensitivity `S`, no smoothing
 — the raw sorted scores); the study evaluates the full sensitivity-parameterised
 algorithm study-side.
 
-## v0.3 simulator (Slice 24 active; Slices 25-26 stubs)
+## v0.3 simulator (Slices 24-25 active; Slice 26 stubs)
 
 `cier_simulate()` is a generator, not an index; trust is **oracle-only** (no CRAN
 package simulates C/IER with a planted truth -- verified 2026-06-11). The four GRM
-rows below are **active** (Slice 24, `test-sim-attentive.R`); the remaining rows
-register the contract ahead of implementation and arrive with their slice (25
-mutators / extent / truth; 26 timing / direct / orchestrator), their exact
-tolerances finalized at each slice's tests-first sign-off. Closed-form oracles and
-paper-anchored pins through the *shipped* indices replace a cross-package partner.
+rows are **active** (Slice 24, `test-sim-attentive.R`); the mutator / extent / truth
+/ recovery rows are now **active** (Slice 25, `test-sim-patterns.R`); the remaining
+timing / direct rows register the contract ahead of implementation and arrive with
+Slice 26 (timing / direct / orchestrator), their exact tolerances finalized at that
+slice's tests-first sign-off. Closed-form oracles and paper-anchored pins through the
+*shipped* indices replace a cross-package partner.
 
 | Quantity | Target tolerance | Reference |
 |---|---:|---|
@@ -208,7 +209,7 @@ paper-anchored pins through the *shipped* indices replace a cross-package partne
 | seed reproducibility: same seed gives bytewise-identical `$responses` / `$seconds` / `$truth`; frozen-seed RNG-stream digest | 0 (`expect_identical`) | self / digest fixture |
 | timing acceptance: default careless rows page-flaggable AND total-time rank-AUC in [.66, .92] | band (not a point tolerance) | self |
 | direct injection: large-n careless / attentive failure rates vs `p_fail` (0.75 / 0.05) | statistical (seeded, large-n) | self |
-| per-pattern recovery: matched-index rank-AUC at or above a recorded per-pattern floor (small n) | floor | self |
+| per-pattern recovery: matched-index rank-AUC at or above a recorded per-pattern floor (n = 200, prevalence 0.25; straightline->longstring / diagonal->lazr / alternating->autocorrelation obs ~1.00, random->mahalanobis obs 0.99, markov->lazr obs 0.81) | floor (0.75-0.85) | `test-sim-patterns.R` |
 
 The deterministic and paper-anchored rows (the marginals resolver, categorisation,
 mutators, the `cier_lazr` / `cier_longstring` / `cier_autocorrelation` pins, extent
