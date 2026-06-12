@@ -157,6 +157,47 @@ check_int <- function(x, arg, call = rlang::caller_env()) {
   invisible(x)
 }
 
+# A uniquely-named set: `nms` must be non-NULL, free of NA, all non-empty, and
+# without duplicates. The shared front-end for the keyed override lists that the
+# simulator accepts (e.g. `timing`, `pattern_params`), so a malformed name set
+# fails the same way everywhere. Returns the names invisibly on success.
+check_unique_names <- function(nms, arg, call = rlang::caller_env()) {
+  named_ok <- !is.null(nms) && !anyNA(nms) && all(nzchar(nms)) &&
+    anyDuplicated(nms) == 0L
+  if (!named_ok) {
+    cier_abort(
+      "cier_error_input",
+      "{.arg {arg}} entries must be uniquely named.",
+      data = list(arg = arg), call = call
+    )
+  }
+  invisible(nms)
+}
+
+# Reject any of `nms` not in the `allowed` set: a typed error listing the
+# offenders and, where the allowlist is non-empty, the permitted names. The
+# shared front-end for the keyed override lists (`timing`, `pattern_params`,
+# `trait_params`), so a typo cannot silently fall back to a default the user
+# did not intend. `label` is the message noun (e.g. "timing parameter").
+# A no-op when every name is allowed (including an empty / NULL `nms`).
+reject_unknown_keys <- function(nms, allowed, arg, label,
+                                call = rlang::caller_env()) {
+  extra <- setdiff(nms, allowed)
+  if (length(extra) == 0L) {
+    return(invisible(NULL))
+  }
+  cier_abort(
+    "cier_error_input",
+    c("Unknown {label}{?s}: {.val {extra}}.",
+      "i" = if (length(allowed) == 0L) {
+        "None is accepted here."
+      } else {
+        "Allowed: {.val {allowed}}."
+      }),
+    data = list(arg = arg, observed = extra), call = call
+  )
+}
+
 # Validate the two mutually-exclusive cutoff-override knobs every percentile
 # index exposes: `fpr` (a target false-positive tail mass in the open unit
 # interval) and a literal `cutoff` on the score (a finite number in

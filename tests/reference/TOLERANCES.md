@@ -184,16 +184,19 @@ close. cier ships the **parameter-free** elbow (no sensitivity `S`, no smoothing
 — the raw sorted scores); the study evaluates the full sensitivity-parameterised
 algorithm study-side.
 
-## v0.3 simulator (Slices 24-25 active; Slice 26 stubs)
+## v0.3 simulator (Slices 24-26 active)
 
 `cier_simulate()` is a generator, not an index; trust is **oracle-only** (no CRAN
 package simulates C/IER with a planted truth -- verified 2026-06-11). The four GRM
 rows are **active** (Slice 24, `test-sim-attentive.R`); the mutator / extent / truth
-/ recovery rows are now **active** (Slice 25, `test-sim-patterns.R`); the remaining
-timing / direct rows register the contract ahead of implementation and arrive with
-Slice 26 (timing / direct / orchestrator), their exact tolerances finalized at that
-slice's tests-first sign-off. Closed-form oracles and paper-anchored pins through the
-*shipped* indices replace a cross-package partner.
+/ recovery rows are **active** (Slice 25, `test-sim-patterns.R`); the timing /
+direct / orchestrator rows are **active** (Slice 26, `test-sim-times.R` /
+`test-sim-direct.R` / `test-cier-simulate.R`, oracles in `ref-sim-times.R`).
+Closed-form oracles and paper-anchored pins through the *shipped* indices replace
+a cross-package partner. Like the RPR oracle, the randomised timing / direct
+re-derivations coordinate their draw order with production so a fixed-seed run
+matches bytewise -- a deliberate reproducibility constraint, not a tautology (the
+arithmetic is recomputed per cell from scratch).
 
 | Quantity | Target tolerance | Reference |
 |---|---:|---|
@@ -205,18 +208,30 @@ slice's tests-first sign-off. Closed-form oracles and paper-anchored pins throug
 | Biemann footnote-2 bounce `c(1,2,3,4,5,4,3,2,1,2)` (p=10, K=5, start 1) gives `cier_lazr` = 2/3; cyclic diagonal gives `cier_lazr` = 1 | 1e-12 (obs ~1e-16) | shipped `cier_lazr` |
 | value-anchored straightliner gives `cier_longstring` = p; positional straightliner run breaks at the scale boundary on a mixed-format battery | 0 (exact) | shipped `cier_longstring` |
 | alternating at period d gives max abs-lag autocorrelation = 1 at lag d | 1e-10 | shipped `cier_autocorrelation` |
-| extent bookkeeping: attentive prefix / suffix byte-identical to the pre-mutation matrix (full / partial / temporary spans) | 0 (`expect_identical`) | `ref-sim-patterns.R` |
-| seed reproducibility: same seed gives bytewise-identical `$responses` / `$seconds` / `$truth`; frozen-seed RNG-stream digest | 0 (`expect_identical`) | self / digest fixture |
-| timing acceptance: default careless rows page-flaggable AND total-time rank-AUC in [.66, .92] | band (not a point tolerance) | self |
-| direct injection: large-n careless / attentive failure rates vs `p_fail` (0.75 / 0.05) | statistical (seeded, large-n) | self |
-| per-pattern recovery: matched-index rank-AUC at or above a recorded per-pattern floor (n = 200, prevalence 0.25; straightline->longstring / diagonal->lazr / alternating->autocorrelation obs ~1.00, random->mahalanobis obs 0.99, markov->lazr obs 0.81) | floor (0.75-0.85) | `test-sim-patterns.R` |
+| extent bookkeeping: attentive prefix / suffix byte-identical to the pre-mutation matrix (full / partial / temporary spans); same-pattern same-span rows with different `truth$params` each get their own knobs | 0 (`expect_identical`) | `ref-sim-patterns.R` |
+| lognormal cell times vs the hand re-derivation (coordinated draw order: n*p cell noise column-major, then n pace intercepts; inclusive span coupling; defaults and overrides) | 1e-12 (obs 0, bytewise float ops) | `ref-sim-times.R` |
+| zero-noise timing closed form: cells exactly `exp(mu_att)` / `exp(mu_car)` on either side of the inclusive span (full / partial / temporary), `min_seconds` floor exact | 1e-12 (floor: 0) | `ref-sim-times.R` |
+| page totals vs the per-respondent per-page double-loop re-derivation; `$seconds` = `rowSums($page_seconds)` | 1e-12 (totals: 1e-9, float summation order) | `ref-sim-times.R` |
+| direct-check injection vs the hand re-derivation (coordinated draw order: key, failure draw, non-key value per failing row); failure <=> response != key | 0 (`expect_identical`) | `ref-sim-times.R` |
+| direct-check `p_fail` edges (1 / 0 and flipped) through shipped `cier_attention`: failed-check count exactly `n_checks` / 0 per group | 0 (exact integer) | shipped `cier_attention` |
+| direct injection: large-n failure rates vs the documented conventions (n = 4000, 4 checks, seed 20260612; obs 0.7395 / 0.0490) | abs dev < 0.03 of 0.75 (careless), < 0.02 of 0.05 (attentive) -- slow tier | `test-sim-direct.R` |
+| timing-calibration acceptance (decision held by test, sign-off 2026-06-12): total-time rank-AUC in [.66, .92]; `cier_page_time(min_seconds = 2)` default rule flags >= 0.5 of full careless rows; attentive false-flag <= 0.25 (n = 4000, prevalence 0.5, 4 x 5-item pages, seed 20260612; obs 0.834 / 0.624 / 0.155) | band / floors (never 1.0 by spec) -- slow tier | shipped `cier_total_time` / `cier_page_time` |
+| speeder split: `$responses` byte-identical to a prevalence-0 run at the same seed; zero-noise speeder totals exactly `p * 1.5` s; default-timing speeder rank-AUC >= 0.70 through `cier_total_time` (obs 0.892) while `cier_longstring` stays <= 0.65 (obs 0.460) | 0 / 1e-9 / floors | `test-cier-simulate.R` |
+| partial onset-coupled timing: zero-noise page totals split exactly 8 vs 1.5 s/item at the onset page boundary | 1e-9 | `test-cier-simulate.R` |
+| provenance: `truth$params` is byte-identical to the knobs the content engine applied (planted straightline `value = 5` recorded AND visible across the span) | 0 (`expect_identical`) | `test-cier-simulate.R` |
+| seed reproducibility: same seed gives a bytewise-identical `cier_sim` (responses / seconds / pages / checks / truth / metadata); frozen-seed RNG-stream digest (md5 over a full-precision text serialisation) | 0 (`expect_identical`) | self / digest fixture in `test-cier-simulate.R` |
+| per-pattern recovery: matched-index rank-AUC at or above a recorded per-pattern floor, kernel-level (n = 200, prevalence 0.25; straightline->longstring / diagonal->lazr / alternating->autocorrelation obs ~1.00, random->mahalanobis obs 0.99, markov->lazr obs 0.81) and end-to-end through `cier_simulate()` | floor (0.75-0.85) | `test-sim-patterns.R` / `test-cier-simulate.R` |
 
 The deterministic and paper-anchored rows (the marginals resolver, categorisation,
-mutators, the `cier_lazr` / `cier_longstring` / `cier_autocorrelation` pins, extent
-bookkeeping, seed reproducibility) and the small-n recovery floors run in the
-**fast tier**. The distribution-level checks that need large n (the GRM
-marginal-frequency oracle, the non-normal trait property checks, the timing AUC
-band, the direct-injection rate check) run **slow tier** (`skip_if_slow()`).
+mutators, the `cier_lazr` / `cier_longstring` / `cier_autocorrelation` /
+`cier_attention` pins, extent bookkeeping, the timing / direct oracle parities,
+zero-noise closed forms, provenance, seed reproducibility, the digest) and the
+small-n recovery floors run in the **fast tier**. The distribution-level checks
+that need large n (the GRM marginal-frequency oracle, the non-normal trait
+property checks, the timing-calibration acceptance, the direct-injection rate
+check) run **slow tier** (`skip_if_slow()`). The markov->lazr floor is a
+deliberately coarse supplementary smoke (~0.81 observed, floor 0.75); the
+deterministic honoured-transition test is the real guard -- do not tighten it.
 
 ## Slice 12 — `cier_screen()` combiner
 

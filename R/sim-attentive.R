@@ -293,20 +293,8 @@ sim_trait_param_keys <- function(distribution) {
 }
 
 sim_check_trait_params <- function(distribution, params, call) {
-  extra <- setdiff(names(params), sim_trait_param_keys(distribution))
-  if (length(extra) > 0L) {
-    allowed <- sim_trait_param_keys(distribution)
-    cier_abort(
-      "cier_error_input",
-      c("Unknown {.arg trait_params} for {.val {distribution}}: {.val {extra}}.",
-        "i" = if (length(allowed) == 0L) {
-          "{.val {distribution}} takes no trait parameters."
-        } else {
-          "Allowed: {.val {allowed}}."
-        }),
-      data = list(arg = "trait_params", observed = extra), call = call
-    )
-  }
+  reject_unknown_keys(names(params), sim_trait_param_keys(distribution),
+                      "trait_params", "trait parameter", call)
   invisible(NULL)
 }
 
@@ -400,9 +388,13 @@ sim_validate_communality <- function(loadings, factor_cor, call) {
 # (defaulting and the marginals-vs-thresholds dispatch). Returns the validated
 # items list plus the resolved generator parameters.
 sim_attentive_inputs <- function(n, items, loadings, factor_cor, thresholds,
-                                 marginals, trait_distribution, call) {
+                                 marginals, trait_distribution, call,
+                                 validated_items = NULL) {
   check_count(n, "n", call = call)
-  it <- check_items_simulate(items, NROW(items), arg = "items", call = call)
+  # Accept a pre-validated check_items_simulate() list to skip a second walk of
+  # the items contract: the orchestrator validates once and threads it through.
+  it <- validated_items %||%
+    check_items_simulate(items, NROW(items), arg = "items", call = call)
   check_choice(trait_distribution, "trait_distribution",
                sim_trait_distributions(), call = call)
   p <- length(it$scale)
@@ -427,10 +419,11 @@ sim_attentive_inputs <- function(n, items, loadings, factor_cor, thresholds,
 sim_attentive_latent <- function(n, items, loadings = NULL, factor_cor = NULL,
                                  thresholds = NULL, marginals = NULL,
                                  trait_distribution = "normal",
-                                 trait_params = list(),
+                                 trait_params = list(), validated_items = NULL,
                                  call = rlang::caller_env()) {
   inputs <- sim_attentive_inputs(n, items, loadings, factor_cor, thresholds,
-                                 marginals, trait_distribution, call)
+                                 marginals, trait_distribution, call,
+                                 validated_items = validated_items)
   it <- inputs$items
   eff <- sim_effective_loadings(inputs$loadings, it)
   traits <- sim_draw_traits(n, inputs$factor_cor,
@@ -470,10 +463,11 @@ sim_attentive_with_metadata <- function(n, items, loadings = NULL,
                                         marginals = NULL,
                                         trait_distribution = "normal",
                                         trait_params = list(),
+                                        validated_items = NULL,
                                         call = rlang::caller_env()) {
   latent <- sim_attentive_latent(n, items, loadings, factor_cor, thresholds,
                                  marginals, trait_distribution, trait_params,
-                                 call = call)
+                                 validated_items = validated_items, call = call)
   cats <- sim_grm_categorise(latent$eta, latent$thresholds)
   responses <- sim_offset_to_range(cats, latent$items$min)
   storage.mode(responses) <- "integer"

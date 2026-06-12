@@ -1,7 +1,9 @@
 # Tests for the careless pattern mutators + extent/onset + truth assembly
-# (Slice 25) -- the careless half of cier_simulate(). Pure internal kernels: no
-# public cier_simulate() and no S3 object yet (Slice 26), so these call the
-# kernels directly in the package namespace.
+# (Slice 25) -- the careless half of cier_simulate(). These call the internal
+# kernels directly in the package namespace; the public orchestrator and the
+# cier_sim object are pinned in test-cier-simulate.R. The content engine reads
+# each careless row's knobs from truth$params (the single provenance source
+# sim_build_plan records); there is no separate pattern_params argument.
 #
 # Trust model: oracle-only (a generator, not an index, with no CRAN partner). The
 # independent oracle (ref-sim-patterns.R) re-derives every deterministic mutator
@@ -50,7 +52,9 @@ make_contaminated <- function(seed, pattern, n = 200L, p = 20L,
                             stats::setNames(1, pattern),
                             pattern_params = pattern_params)
     att <- sim_attentive(n, it_df)
-    resp <- sim_apply_patterns(att, items, truth, pattern_params = pattern_params)
+    # the engine reads each row's knobs from truth$params (the single source
+    # sim_build_plan recorded) -- there is no separate pattern_params argument.
+    resp <- sim_apply_patterns(att, items, truth)
     list(responses = resp, truth = truth)
   })
 }
@@ -510,9 +514,9 @@ test_that("the content engine mutates exactly each row's own span", {
     offset_item = c(10L, 6L, 10L, NA),
     stringsAsFactors = FALSE
   )
-  truth$params <- list(list(), list(), list(), list())
-  pp <- list(straightline = list(anchor = "value", value = 5))
-  m <- sim_apply_patterns(att, items, truth, pattern_params = pp)
+  pp <- list(anchor = "value", value = 5)
+  truth$params <- list(pp, pp, pp, list())
+  m <- sim_apply_patterns(att, items, truth)
   # row 1 partial [4, 10]: prefix 1:3 untouched, span 4:10 = 5 (off-by-one pinned).
   expect_identical(m[1L, 1:3], rep(2L, 3L))
   expect_identical(m[1L, 4:10], rep(5L, 7L))
@@ -539,9 +543,9 @@ test_that("each row mutates over its OWN span, restarting the pattern at the ons
     onset_item = c(1L, 3L), offset_item = c(6L, 6L),
     stringsAsFactors = FALSE
   )
-  truth$params <- list(list(), list())
-  pp <- list(diagonal = list(start = 1, step = 1, bounce = FALSE))
-  m <- sim_apply_patterns(att, items, truth, pattern_params = pp)
+  pp <- list(start = 1, step = 1, bounce = FALSE)
+  truth$params <- list(pp, pp)
+  m <- sim_apply_patterns(att, items, truth)
   expect_identical(m[1L, ], c(1L, 2L, 3L, 4L, 5L, 1L))      # full diagonal from col 1
   expect_identical(m[2L, 1:2], c(3L, 3L))                   # prefix untouched (own span)
   expect_identical(m[2L, 3:6], c(1L, 2L, 3L, 4L))           # restarts at the onset, not 3,4,5,1
@@ -559,6 +563,27 @@ test_that("speeder rows leave content untouched (timing is Slice 26)", {
   )
   truth$params <- list(list(), list())
   expect_identical(sim_apply_patterns(att, items, truth), att)
+})
+
+test_that("rows sharing a pattern and span but not params keep their own knobs", {
+  # The engine groups producer calls by pattern AND span AND params: a mutant
+  # that groups by pattern + span alone would hand row 2 row 1's straightline
+  # value. (cier_simulate() always records one params list per pattern, but the
+  # engine must honour the truth frame it is actually given.)
+  items <- vit(rep("F", 6L), max = 5)
+  att <- matrix(3L, nrow = 2L, ncol = 6L)
+  truth <- data.frame(
+    careless = c(TRUE, TRUE),
+    pattern = c("straightline", "straightline"),
+    extent = c("full", "full"),
+    onset_item = c(1L, 1L), offset_item = c(6L, 6L),
+    stringsAsFactors = FALSE
+  )
+  truth$params <- list(list(anchor = "value", value = 2L),
+                       list(anchor = "value", value = 4L))
+  m <- sim_apply_patterns(att, items, truth)
+  expect_identical(m[1L, ], rep(2L, 6L))
+  expect_identical(m[2L, ], rep(4L, 6L))
 })
 
 # ---- Plan validation edges --------------------------------------------------

@@ -7,6 +7,15 @@
 # Data-documentation pages (\docType{data}) are exempt: they cite the source of
 # a bundled dataset, which is a data provenance reference, not a method citation,
 # and so is recorded in LICENSE.note / the data page rather than the registry.
+#
+# The simulator's page (cier_simulate.Rd) is likewise exempt: cier_simulate()
+# is a data generator, not an index -- by the ADR it has NO registry row (no
+# cutoff, no direction, never in cier_screen()), and its references cite the
+# published simulation designs and calibration anchors it follows, not method
+# citations the registry could carry.
+generator_doc_exemptions <- function() {
+  "cier_simulate.Rd"
+}
 
 # TRUE when an Rd file documents a dataset (cites a data source, not a method).
 is_data_doc <- function(rd_file) {
@@ -49,6 +58,7 @@ test_that("every @references DOI resolves to a registry citation entry", {
   man_dir <- file.path(cier_pkg_root(), "man")
   skip_if(!dir.exists(man_dir), "man/ not on disk")
   rd <- list.files(man_dir, pattern = "\\.Rd$", full.names = TRUE)
+  rd <- rd[!basename(rd) %in% generator_doc_exemptions()]
   rd <- Filter(function(f) !is_data_doc(f), rd)
   skip_if(length(rd) == 0L, "no man pages on disk")
 

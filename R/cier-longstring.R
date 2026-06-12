@@ -15,11 +15,16 @@
 #'
 #' @details
 #' **Cutoff.** The default cutoff is `ceiling(0.5 * p)` where `p` is the number
-#' of items. Override it with **one** of two mutually exclusive arguments:
-#' `frac`, a fraction of the item count in `(0, 1]` (resolving to
-#' `ceiling(frac * p)`), or `cutoff`, a literal run-length count in `[1, p]`.
-#' Respondents whose longest run is greater than or equal to the resolved cutoff
-#' are flagged.
+#' of items — the "greater than half the scale length" starting point suggested
+#' by Meade & Craig (2012), applied here to the full item set. It is a heuristic,
+#' **not** a calibrated false-positive rate: longstring has no universal cutoff
+#' ([careless::longstring()] leaves the choice to inspection), and half of *all*
+#' items is lenient for a multi-scale instrument — consider a smaller `frac` or
+#' `cutoff` and check the score distribution. Override the default with **one** of
+#' two mutually exclusive arguments: `frac`, a fraction of the item count in
+#' `(0, 1]` (resolving to `ceiling(frac * p)`), or `cutoff`, a literal run-length
+#' count in `[1, p]`. Respondents whose longest run is greater than or equal to
+#' the resolved cutoff are flagged.
 #'
 #' **Abstention.** A respondent who answered nothing (an all-`NA` row) abstains:
 #' both `value` and `flagged` are `NA` and the row is excluded from the flag

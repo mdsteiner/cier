@@ -196,12 +196,15 @@ sim_build_plan <- function(n, p, prevalence, patterns = c(random = 1),
 
 # ---- Content engine ---------------------------------------------------------
 
-# Overwrite each careless non-speeder row's span with its pattern block. Rows that
-# share a pattern AND a span are produced together (one producer call). Speeder and
+# Overwrite each careless non-speeder row's span with its pattern block. Each
+# row's knobs come from the truth frame's own `params` column (the single
+# provenance source sim_build_plan records), so what the truth records and what
+# the engine applies cannot desync. Rows that share a pattern AND a span AND a
+# params record are produced together (one producer call). Speeder and
 # attentive rows -- and every cell outside a careless span -- are left untouched, so
 # the attentive prefix / recovery tail is byte-identical to `attentive`. `items` is
 # the validated check_items_simulate list; `truth` the sim_build_plan frame.
-sim_apply_patterns <- function(attentive, items, truth, pattern_params = list(),
+sim_apply_patterns <- function(attentive, items, truth,
                                call = rlang::caller_env()) {
   x <- attentive
   storage.mode(x) <- "integer"
@@ -209,19 +212,28 @@ sim_apply_patterns <- function(attentive, items, truth, pattern_params = list(),
   if (length(active) == 0L) {
     return(x)
   }
+  params_col <- truth$params %||% rep(list(list()), nrow(truth))
+  # The params fingerprint extends the group key: sim_build_plan records one
+  # params list per pattern, but a hand-built truth may vary knobs per row, and
+  # grouping by pattern + span alone would silently hand such rows the first
+  # row's knobs.
+  params_key <- vapply(params_col[active], function(prm) {
+    paste(deparse(prm), collapse = " ")
+  }, character(1L))
   key <- paste(truth$pattern[active], truth$onset_item[active],
-               truth$offset_item[active], sep = "\r")
-  # Group rows that share a pattern AND a span. Level order is first-appearance
-  # (factor on `unique(key)`), NOT split()'s locale-sorted default: the groups are
-  # visited in that order and each consumes RNG, so a locale-dependent order would
-  # make the seeded output differ across machines (the radix-sort lesson from the
-  # attentive layer).
+               truth$offset_item[active], params_key, sep = "\r")
+  # Group rows that share a pattern AND a span AND params. Level order is
+  # first-appearance (factor on `unique(key)`), NOT split()'s locale-sorted
+  # default: the groups are visited in that order and each consumes RNG, so a
+  # locale-dependent order would make the seeded output differ across machines
+  # (the radix-sort lesson from the attentive layer).
   for (grp in split(active, factor(key, levels = unique(key)))) {
-    pat <- truth$pattern[[grp[[1L]]]]
-    cols <- truth$onset_item[[grp[[1L]]]]:truth$offset_item[[grp[[1L]]]]
+    first <- grp[[1L]]
+    pat <- truth$pattern[[first]]
+    cols <- truth$onset_item[[first]]:truth$offset_item[[first]]
     producer <- sim_block_fun(pat)
     block <- producer(length(grp), items$min[cols], items$max[cols],
-                      pattern_params[[pat]] %||% list(), call)
+                      params_col[[first]] %||% list(), call)
     x[grp, cols] <- block
   }
   x

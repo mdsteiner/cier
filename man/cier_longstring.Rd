@@ -32,11 +32,16 @@ over the raw response row (no scale blocking).
 }
 \details{
 \strong{Cutoff.} The default cutoff is \code{ceiling(0.5 * p)} where \code{p} is the number
-of items. Override it with \strong{one} of two mutually exclusive arguments:
-\code{frac}, a fraction of the item count in \verb{(0, 1]} (resolving to
-\code{ceiling(frac * p)}), or \code{cutoff}, a literal run-length count in \verb{[1, p]}.
-Respondents whose longest run is greater than or equal to the resolved cutoff
-are flagged.
+of items — the "greater than half the scale length" starting point suggested
+by Meade & Craig (2012), applied here to the full item set. It is a heuristic,
+\strong{not} a calibrated false-positive rate: longstring has no universal cutoff
+(\code{\link[careless:longstring]{careless::longstring()}} leaves the choice to inspection), and half of \emph{all}
+items is lenient for a multi-scale instrument — consider a smaller \code{frac} or
+\code{cutoff} and check the score distribution. Override the default with \strong{one} of
+two mutually exclusive arguments: \code{frac}, a fraction of the item count in
+\verb{(0, 1]} (resolving to \code{ceiling(frac * p)}), or \code{cutoff}, a literal run-length
+count in \verb{[1, p]}. Respondents whose longest run is greater than or equal to
+the resolved cutoff are flagged.
 
 \strong{Abstention.} A respondent who answered nothing (an all-\code{NA} row) abstains:
 both \code{value} and \code{flagged} are \code{NA} and the row is excluded from the flag
