@@ -4,7 +4,12 @@
 #          responsible for. Single-kernel rule: one production implementation
 #          per statistic.
 # Args:    See per-kernel documentation below.
-# Returns: Numeric vectors; never raises typed errors (the wrappers validate).
+# Returns: The KERNELS return numeric vectors and never raise typed conditions
+#          (the wrappers validate). The shared pre-score helpers in this file are
+#          the documented exception: apply_split_half_keying() aborts on a bad
+#          reverse-keying declaration and warn_two_scale_consistency() warns on a
+#          degenerate two-scale design -- both are validation / diagnostic steps,
+#          not numeric kernels.
 # Invariants:
 #   - Kernels are pure (no I/O, no global state) and never mutate inputs. The one
 #     exception is kernel_rpr(): with a non-NULL seed it sets a local RNG seed and
@@ -194,6 +199,34 @@ scale_block_indices <- function(items) {
     out[[lab]] <- which(scales == lab)
   }
   out
+}
+
+# Warn when exactly two scale blocks are scorable (>= 2 items each; a one-item
+# block yields a NULL split downstream and is skipped). With only two blocks the
+# split-half consistency correlation is taken across two block means, so it is
+# +/-1 by construction: a degenerate point mass for even-odd / PR, and a coarse
+# average of +/-1 iterations for RPR. The trigger is a structural property of the
+# item design (block sizes), so the warning fires once at the wrapper -- before
+# scoring, independent of the responses and of the resample mode -- WITHOUT
+# changing the statistic (careless parity preserved; the user may still want the
+# coarse consistent / inconsistent split, or override with >= 3 scales). Shared by
+# the even-odd and personal-reliability wrappers (single source). See ADR.md
+# ("Split-half two-scale degeneracy", D6).
+warn_two_scale_consistency <- function(blocks, call = rlang::caller_env()) {
+  if (sum(lengths(blocks) >= 2L) == 2L) {
+    cier_warn(
+      "cier_warning_two_scale_consistency",
+      c("Only two scorable scale blocks: the split-half consistency correlation \\
+         is taken across just two block means, so it can only be {.val -1} or \\
+         {.val 1}.",
+        "i" = "The consistency score is therefore degenerate (clustered at the \\
+               {.val -1} / {.val 1} extremes, with no ranking inside the careless \\
+               tail). Provide >= 3 multi-item scales for a graded consistency \\
+               score."),
+      data = list(n_scorable = 2L), call = call
+    )
+  }
+  invisible(NULL)
 }
 
 # Spearman-Brown correction 2r/(1+r) with the careless clamp at -1. NA in -> NA

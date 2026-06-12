@@ -42,6 +42,13 @@
 #' (e.g. one carried over from a calibration sample). `fpr` and `cutoff` are
 #' mutually exclusive.
 #'
+#' **Score range.** The Spearman-Brown clamp maps every across-block correlation
+#' at or below `-1/3` to exactly `+1`: the `2r / (1 + r)` correction reaches `-1`
+#' there and is clamped, so the negated score has a **point mass at `+1`** (its
+#' careless maximum) with no ranking among the rows in it. As with any tie mass at
+#' the cutoff, a percentile cutoff landing on that atom flags more than `fpr` of
+#' respondents (the ranking-convention caveat in **Cutoff** above).
+#'
 #' **Abstention.** A respondent for whom fewer than two scale blocks yield a
 #' finite even-and-odd mean pair, or whose (reverse-scored) half-mean vectors have
 #' no variance across scales, has no defined consistency correlation: both `value`
@@ -50,7 +57,12 @@
 #' (raw straightliner) row abstains only when reverse-scoring leaves it constant --
 #' a forward-keyed battery, or a value at the scale midpoint. With reverse-keyed
 #' items an off-midpoint constant row is reflected into a non-constant one and so
-#' receives a finite score rather than abstaining.
+#' receives a finite score rather than abstaining. With exactly **two** scorable
+#' scale blocks (the smallest multi-scale design) the across-block correlation is
+#' taken over two points, so it is `+1` or `-1` by construction -- a degenerate
+#' binary score, not a graded one. The index still returns it and emits a typed
+#' warning; `>= 3` multi-item scales are recommended for a graded consistency
+#' score.
 #'
 #' @section What this catches:
 #' Random, alternating, and opposite-pattern responding whose within-scale halves
@@ -122,6 +134,8 @@ cier_even_odd <- function(responses, items, fpr = NULL, cutoff = NULL) {
   # Reverse-score keyed items, then score the even-odd consistency. The kernel
   # returns NA where a row abstains, so abstention needs no separate guard.
   responses <- apply_split_half_keying(responses, items, call = call)
-  value <- kernel_even_odd(responses, scale_block_indices(items))
+  blocks <- scale_block_indices(items)
+  warn_two_scale_consistency(blocks, call = call)
+  value <- kernel_even_odd(responses, blocks)
   resolve_index_cutoff(value, row, fpr, cutoff, call = call)
 }

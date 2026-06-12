@@ -81,6 +81,15 @@ RPR oracle additionally coordinates its random-draw order with production so a
 fixed-seed run matches bytewise -- a deliberate reproducibility constraint, not
 a tautology (the statistic itself is re-derived from scratch).
 
+**Split-half two-scale degeneracy (D6, release review 2026-06-12).** The
+`cier_warning_two_scale_consistency` warning the split-half wrappers now raise when a
+battery has exactly two scorable scales is **diagnostic-only**: it changes no score,
+cutoff, or flag, so the even-odd (`careless` bytewise-0; oracle 1e-12) and PR / RPR
+(oracle 1e-12 / 1e-10) rows above are unchanged. The warned RPR path is pinned
+byte-equal (1e-10) to `ref_rpr` in `test-cier-personal-reliability.R`, confirming the
+warning does not disturb the resampling RNG stream. See `ADR.md`, "Split-half
+two-scale degeneracy (D6)".
+
 Psychsyn's kernel scores each respondent with a **vectorised masked-sum** Pearson
 over the stacked pair matrices (one `rowSums` pass, not a per-row `cor()` loop).
 This is the same correlation as the per-row `cor()` that `careless::psychsyn` and

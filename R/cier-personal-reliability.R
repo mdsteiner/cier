@@ -60,13 +60,26 @@
 #' score threshold (e.g. one carried over from a calibration sample). `fpr` and
 #' `cutoff` are mutually exclusive.
 #'
+#' **Score range.** The Spearman-Brown clamp maps every across-block correlation
+#' at or below `-1/3` to exactly `+1`: the `2r / (1 + r)` correction reaches `-1`
+#' there and is clamped, so the negated (per-iteration) score has a **point mass
+#' at `+1`**, its careless maximum. PR returns that atom directly; RPR averages it
+#' across iterations, so its scores cluster toward the extremes. As with any tie
+#' mass at the cutoff, a percentile cutoff landing on the atom flags more than
+#' `fpr` of respondents (the ranking-convention caveat in **Cutoff** above).
+#'
 #' **Abstention.** A respondent for whom fewer than two scale blocks yield a
 #' finite half-mean pair, or whose half-mean vectors have no variance across
 #' scales, has no defined reliability correlation: both `value` and `flagged` are
 #' `NA` and the row is excluded from the flag count and rate. A scale with only
 #' one item cannot be split and is skipped. For RPR a respondent is `NA` only
 #' when **every** resampled iteration abstains; otherwise the score averages the
-#' finite iterations.
+#' finite iterations. With exactly **two** scorable scale blocks (the smallest
+#' multi-scale design) the across-block correlation is taken over two points, so
+#' it is `+1` or `-1` by construction -- a degenerate binary score for PR, and a
+#' coarse average of those `+/-1` iterations for RPR. The index still returns it
+#' and emits a typed warning; `>= 3` multi-item scales are recommended for a
+#' graded consistency score.
 #'
 #' @section What this catches:
 #' Random, alternating, and opposite-pattern responding whose within-scale halves
@@ -150,6 +163,7 @@ cier_personal_reliability <- function(responses, items, resample = TRUE,
   row <- cier_method_row("cier_personal_reliability")
   responses <- apply_split_half_keying(responses, items, call = call)
   blocks <- scale_block_indices(items)
+  warn_two_scale_consistency(blocks, call = call)
   value <- if (resample) {
     kernel_rpr(responses, blocks, n_resamples, seed)
   } else {

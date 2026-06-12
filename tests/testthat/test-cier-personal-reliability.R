@@ -468,6 +468,82 @@ test_that("when every respondent abstains the cutoff warns and flags nobody", {
   expect_true(all(is.na(out$flagged)))
 })
 
+# ---- Two-scale degeneracy (D6) ----------------------------------------------
+# The same structural degeneracy as even-odd: exactly two scorable scale blocks
+# make the across-block correlation +/-1 by construction. The warning fires for
+# PR AND RPR (it keys on the block structure, not the score), even though RPR's
+# averaged score is not itself a +/-1 point mass.
+
+# A 2-scale x 2-item battery: consistent rows score -1, inverse rows +1 under the
+# deterministic first/second-half split too.
+two_scale_pm1 <- function(n_consistent, n_inverse) {
+  x <- rbind(
+    matrix(rep(c(1, 1, 5, 5), n_consistent), ncol = 4L, byrow = TRUE),
+    matrix(rep(c(1, 5, 5, 1), n_inverse),    ncol = 4L, byrow = TRUE)
+  )
+  storage.mode(x) <- "double"
+  x
+}
+
+test_that("two scorable scale blocks warn and score +/-1 (deterministic PR)", {
+  it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
+  x <- two_scale_pm1(12L, 8L)                    # 12 consistent (-1), 8 inverse (+1)
+  expect_warning(
+    out <- cier_personal_reliability(x, it, resample = FALSE, cutoff = 0),
+    class = "cier_warning_two_scale_consistency", regexp = "scorable"
+  )
+  expect_true(all(out$value %in% c(-1, 1)))
+  expect_identical(sum(out$flagged), 8L)
+})
+
+test_that("two scorable scale blocks warn for RPR too (averaged scores are not +/-1)", {
+  # RPR fires the same structural warning, yet its per-respondent score averages
+  # +/-1 per-iteration correlations into a graded value -- so a mutant that gated
+  # the warning on a +/-1 score (or only fired it from even-odd) is killed here.
+  it <- blocked_items(2L, 4L, reverse_keyed = FALSE)      # 2 scales x 4 items
+  x <- rand_matrix(25L, 8L, 5L)
+  expect_warning(
+    out <- cier_personal_reliability(x, it, n_resamples = 25L, seed = 3L, cutoff = 0),
+    class = "cier_warning_two_scale_consistency"
+  )
+  finite <- out$value[is.finite(out$value)]
+  expect_true(all(finite >= -1 & finite <= 1))
+  expect_false(all(finite %in% c(-1, 1)))                 # genuinely graded average
+  # No statistic change on the resampled path: the warned values are byte-equal
+  # (1e-10) to the independent oracle, so the warning does not disturb the RNG
+  # stream or the score.
+  expect_equal(out$value, ref_rpr(x, blocks_from_scale(it), 25L, 3L),
+               tolerance = 1e-10)
+})
+
+test_that("RPR emits the two-scale warning once, not once per resample", {
+  # The worst multiplier: a per-iteration emission would signal 25x per row. The
+  # helper runs once at wrapper level (before the resampling loop), so one warning.
+  it <- blocked_items(2L, 4L, reverse_keyed = FALSE)
+  ww <- capture_warnings(
+    cier_personal_reliability(rand_matrix(25L, 8L, 5L), it, n_resamples = 25L,
+                              seed = 3L, cutoff = 0)
+  )
+  expect_length(grep("scorable", ww), 1L)
+})
+
+test_that("the two-scale warning keys on scorable blocks, not scale labels (PR)", {
+  # A one-item scale is skipped: three labels with a singleton leave two scorable
+  # blocks (warn); three full scales do not (kills label-count / >= 2 triggers).
+  it_two <- data.frame(scale = c("A", "B", "B", "C", "C"), reverse_keyed = FALSE)
+  expect_warning(
+    cier_personal_reliability(rand_matrix(20L, 5L, 11L), it_two, resample = FALSE,
+                              cutoff = 0),
+    class = "cier_warning_two_scale_consistency"
+  )
+  it_three <- blocked_items(3L, 4L, reverse_keyed = FALSE)    # 3 scorable blocks
+  expect_no_warning(
+    cier_personal_reliability(rand_matrix(20L, 12L, 12L), it_three, resample = FALSE,
+                              cutoff = 0),
+    class = "cier_warning_two_scale_consistency"
+  )
+})
+
 # ---- Input validation (typed) ----------------------------------------------
 
 test_that("fewer than two distinct scales is a typed input error", {
@@ -504,7 +580,11 @@ test_that("an absolute cutoff overrides the percentile and flags via the upper t
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- rbind(c(1, 1, 5, 5), c(1, 5, 5, 1))   # consistent (-1) and inverse (+1)
   storage.mode(x) <- "double"
-  out <- cier_personal_reliability(x, it, resample = FALSE, cutoff = 0)
+  # 2-scale fixture: the D6 two-scale warning fires alongside the cutoff override
+  # under test, so it is muffled here (covered by the degeneracy block above).
+  out <- suppressWarnings(
+    cier_personal_reliability(x, it, resample = FALSE, cutoff = 0)
+  )
   expect_identical(out$cutoff, 0)
   expect_identical(out$flagged, c(FALSE, TRUE))
 })

@@ -419,6 +419,91 @@ test_that("when every respondent abstains the cutoff warns and flags nobody", {
   expect_true(all(is.na(out$flagged)))
 })
 
+# ---- Two-scale degeneracy (D6) ----------------------------------------------
+# With exactly two scorable scale blocks (>= 2 items each) the across-block
+# consistency correlation is taken over two points, so it is +/-1 by
+# construction -- a degenerate score min_scales = 2 used to admit silently
+# (F03/F34). The wrapper now warns (typed cier_warning_two_scale_consistency)
+# from a purely structural trigger (block sizes), without changing the statistic.
+
+# A 2-scale x 2-item battery: `n_consistent` perfectly consistent rows (-1) and
+# `n_inverse` perfectly inverse rows (+1), so every finite score is exactly +/-1.
+two_scale_pm1 <- function(n_consistent, n_inverse) {
+  x <- rbind(
+    matrix(rep(c(1, 1, 5, 5), n_consistent), ncol = 4L, byrow = TRUE),
+    matrix(rep(c(1, 5, 5, 1), n_inverse),    ncol = 4L, byrow = TRUE)
+  )
+  storage.mode(x) <- "double"
+  x
+}
+
+test_that("two scorable scale blocks warn and score the degenerate +/-1 (even-odd)", {
+  # Regression for F03/F34: a 2-scale battery flags on a binary +/-1 score. The
+  # silent degenerate flagging is now accompanied by a typed warning; cutoff = 0
+  # isolates this warning from the percentile path.
+  it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
+  x <- two_scale_pm1(12L, 8L)                    # 12 consistent (-1), 8 inverse (+1)
+  expect_warning(out <- cier_even_odd(x, it, cutoff = 0),
+                 class = "cier_warning_two_scale_consistency",
+                 regexp = "scorable")
+  expect_true(all(out$value %in% c(-1, 1)))      # a +/-1 point mass, no gradation
+  expect_identical(sum(out$flagged), 8L)         # the 8 inverse rows flag at cutoff 0
+})
+
+test_that("the two-scale warning keys on scorable blocks, not scale labels (even-odd)", {
+  # A one-item scale is skipped, so three labels with a singleton scale leave
+  # exactly two scorable blocks and must warn; three full scales must not (kills
+  # a label-count / >= 2 / length(blocks) trigger).
+  it_two <- data.frame(scale = c("A", "B", "B", "C", "C"), reverse_keyed = FALSE)
+  expect_warning(cier_even_odd(rand_matrix(20L, 5L, 11L), it_two, cutoff = 0),
+                 class = "cier_warning_two_scale_consistency")
+  it_three <- blocked_items(3L, 4L, reverse_keyed = FALSE)    # 3 scorable blocks
+  expect_no_warning(cier_even_odd(rand_matrix(20L, 12L, 7L), it_three, cutoff = 0),
+                    class = "cier_warning_two_scale_consistency")
+})
+
+test_that("a single scorable scale block abstains without the two-scale warning", {
+  # Two labels but one is a singleton -> one scorable block -> every row abstains
+  # (< 2 finite half-mean pairs). This is the insufficient-blocks case, NOT the
+  # two-scale degeneracy, so the warning must stay silent (separates == 2 from
+  # <= 2). cutoff = 0 keeps the percentile abstention warning out of the way.
+  it_one <- data.frame(scale = c("A", "B", "B"), reverse_keyed = FALSE)
+  out <- expect_no_warning(
+    cier_even_odd(rand_matrix(20L, 3L, 9L), it_one, cutoff = 0),
+    class = "cier_warning_two_scale_consistency"
+  )
+  expect_true(all(is.na(out$value)))
+})
+
+test_that("the two-scale warning fires once per call, not once per respondent", {
+  # The helper is called once at wrapper level, so a 20-respondent battery warns
+  # exactly once. A mutant emitting it inside the per-respondent row loop would
+  # signal 20 times and spam the console while still passing expect_warning.
+  it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
+  ww <- capture_warnings(cier_even_odd(two_scale_pm1(12L, 8L), it, cutoff = 0))
+  expect_length(grep("scorable", ww), 1L)
+})
+
+test_that("warn_two_scale_consistency keys on scorable blocks and carries n_scorable", {
+  # Direct helper coverage: the trigger is purely structural (block sizes), so it
+  # is exercised on hand-built block lists with NO responses at all -- localizing
+  # a count mutant to the helper and pinning the n_scorable payload. Block index
+  # values are irrelevant; only the per-block lengths drive the trigger.
+  cond <- expect_warning(
+    warn_two_scale_consistency(list(A = 1:2, B = 3:4)),     # 2 scorable -> warn
+    class = "cier_warning_two_scale_consistency"
+  )
+  expect_identical(cier_condition_data(cond)$n_scorable, 2L)
+  expect_no_warning(                                        # 3 scorable -> silent
+    warn_two_scale_consistency(list(A = 1:2, B = 3:4, C = 5:6)),
+    class = "cier_warning_two_scale_consistency"
+  )
+  expect_no_warning(                                        # 1 scorable -> silent
+    warn_two_scale_consistency(list(A = 1L, B = 2:3)),
+    class = "cier_warning_two_scale_consistency"
+  )
+})
+
 # ---- Input validation (typed) ----------------------------------------------
 
 test_that("fewer than two distinct scales is a typed input error", {
@@ -455,7 +540,9 @@ test_that("an absolute cutoff overrides the percentile and flags via the upper t
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- rbind(c(1, 1, 5, 5), c(1, 5, 5, 1))
   storage.mode(x) <- "double"
-  out <- cier_even_odd(x, it, cutoff = 0)
+  # 2-scale fixture: the D6 two-scale warning fires alongside the cutoff override
+  # under test, so it is muffled here (covered by the degeneracy block above).
+  out <- suppressWarnings(cier_even_odd(x, it, cutoff = 0))
   expect_identical(out$cutoff, 0)
   expect_identical(out$flagged, c(FALSE, TRUE))
 })

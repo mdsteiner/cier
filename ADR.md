@@ -531,6 +531,48 @@ default-vs-oracle parity tests compare at the same range; the exact default form
 is pinned independently by the wrapper's hard-coded explicit-lag self-comparison
 (it never resolves above `ncol - 3`).
 
+## Split-half two-scale degeneracy (D6, release review 2026-06-12)
+
+The split-half consistency indices (`cier_even_odd`, `cier_personal_reliability`)
+correlate, across scale blocks, a first-half-mean vector against a second-half-mean
+vector. With exactly **two scorable scale blocks** (blocks of >= 2 items; a one-item
+scale is skipped) that correlation is taken over two points, so it is **+/-1 by
+construction** (or `NA`). `check_items(min_scales = 2)` admitted this silently: the
+score collapsed to a binary point mass and ~18% of respondents were flagged on a
+degenerate score with no signal (F03 / F34, both confirmed). A related atom (F04):
+the Spearman-Brown clamp `2r / (1 + r)` reaches `-1` at `r = -1/3` and is clamped
+there, so every across-block `r <= -1/3` maps to exactly `+1` (the negated careless
+maximum) -- a point mass with no within-tail ranking, regardless of the scale count.
+
+Decision (signed off): emit a typed `cier_warning_two_scale_consistency` from both
+wrappers; **keep `min_scales = 2` and the statistic unchanged** -- no abstention,
+bytewise `careless` parity preserved. The user may still want the coarse consistent /
+inconsistent split (or can override), so warn rather than refuse.
+
+- **Trigger.** Purely structural: `sum(lengths(blocks) >= 2L) == 2L` on the
+  `scale_block_indices()` list, computed once at the wrapper before scoring. It is
+  independent of the responses and of `resample` mode, so it fires for even-odd, PR
+  AND RPR. (For even-odd / PR the per-respondent score is literally `+/-1`; for RPR
+  each iteration's correlation is `+/-1`, so the averaged score clusters coarsely at
+  the extremes -- the same design problem.) A one-item scale is skipped (a NULL split
+  downstream), so it is not scorable; one scorable block is the existing all-abstain
+  case (`cier_warning_insufficient_items`), not this one.
+- **Shared helper.** `warn_two_scale_consistency()` lives beside the other split-half
+  helpers in `R/index-kernels-indirect.R` (single source for both wrappers); it joins
+  the split-half family WP13 plans to relocate.
+- **Screen.** `cier_screen()` **surfaces** the warning -- unlike the WP3 cutoff
+  warnings (`cier_warning_insufficient_items` / `cier_warning_saturated_cutoff`) it
+  does **not** muffle. Those fire on essentially every Likert screen and the screen
+  already prints each per-index flag rate; this one fires only on a genuinely
+  two-scale design, is actionable, and the screen has no `$skipped` row for a
+  degenerate-but-scoring index, so muffling would re-introduce exactly the silent
+  degeneracy F34 reported.
+- **Docs / tolerances.** Both `@details` gain the SB-clamp atom note and the two-block
+  binary note; the registry `notes` for both indices carry the one-line caveat. No
+  statistic, cutoff, or tolerance change -- the even-odd `careless` bytewise-0 and
+  PR / RPR 1e-12 / 1e-10 oracle rows in `TOLERANCES.md` are unchanged (the warned RPR
+  path is pinned byte-equal to `ref_rpr`).
+
 ## Agreement diagnostic: observed co-occurrence vs a Poisson-binomial null
 
 Because an empirical-percentile cutoff flags at least its target rate by

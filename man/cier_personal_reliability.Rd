@@ -104,13 +104,26 @@ with \code{fpr}, or pass an absolute \code{cutoff} in \verb{[-1, 1]} to flag on 
 score threshold (e.g. one carried over from a calibration sample). \code{fpr} and
 \code{cutoff} are mutually exclusive.
 
+\strong{Score range.} The Spearman-Brown clamp maps every across-block correlation
+at or below \code{-1/3} to exactly \code{+1}: the \verb{2r / (1 + r)} correction reaches \code{-1}
+there and is clamped, so the negated (per-iteration) score has a \strong{point mass
+at \code{+1}}, its careless maximum. PR returns that atom directly; RPR averages it
+across iterations, so its scores cluster toward the extremes. As with any tie
+mass at the cutoff, a percentile cutoff landing on the atom flags more than
+\code{fpr} of respondents (the ranking-convention caveat in \strong{Cutoff} above).
+
 \strong{Abstention.} A respondent for whom fewer than two scale blocks yield a
 finite half-mean pair, or whose half-mean vectors have no variance across
 scales, has no defined reliability correlation: both \code{value} and \code{flagged} are
 \code{NA} and the row is excluded from the flag count and rate. A scale with only
 one item cannot be split and is skipped. For RPR a respondent is \code{NA} only
 when \strong{every} resampled iteration abstains; otherwise the score averages the
-finite iterations.
+finite iterations. With exactly \strong{two} scorable scale blocks (the smallest
+multi-scale design) the across-block correlation is taken over two points, so
+it is \code{+1} or \code{-1} by construction -- a degenerate binary score for PR, and a
+coarse average of those \verb{+/-1} iterations for RPR. The index still returns it
+and emits a typed warning; \verb{>= 3} multi-item scales are recommended for a
+graded consistency score.
 }
 \section{What this catches}{
 

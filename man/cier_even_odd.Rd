@@ -67,6 +67,13 @@ pass an absolute \code{cutoff} in \verb{[-1, 1]} to flag on a literal score thre
 (e.g. one carried over from a calibration sample). \code{fpr} and \code{cutoff} are
 mutually exclusive.
 
+\strong{Score range.} The Spearman-Brown clamp maps every across-block correlation
+at or below \code{-1/3} to exactly \code{+1}: the \verb{2r / (1 + r)} correction reaches \code{-1}
+there and is clamped, so the negated score has a \strong{point mass at \code{+1}} (its
+careless maximum) with no ranking among the rows in it. As with any tie mass at
+the cutoff, a percentile cutoff landing on that atom flags more than \code{fpr} of
+respondents (the ranking-convention caveat in \strong{Cutoff} above).
+
 \strong{Abstention.} A respondent for whom fewer than two scale blocks yield a
 finite even-and-odd mean pair, or whose (reverse-scored) half-mean vectors have
 no variance across scales, has no defined consistency correlation: both \code{value}
@@ -75,7 +82,12 @@ scale with only one item cannot be split and is skipped. Note that a constant
 (raw straightliner) row abstains only when reverse-scoring leaves it constant --
 a forward-keyed battery, or a value at the scale midpoint. With reverse-keyed
 items an off-midpoint constant row is reflected into a non-constant one and so
-receives a finite score rather than abstaining.
+receives a finite score rather than abstaining. With exactly \strong{two} scorable
+scale blocks (the smallest multi-scale design) the across-block correlation is
+taken over two points, so it is \code{+1} or \code{-1} by construction -- a degenerate
+binary score, not a graded one. The index still returns it and emits a typed
+warning; \verb{>= 3} multi-item scales are recommended for a graded consistency
+score.
 }
 \section{What this catches}{
 
