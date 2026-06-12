@@ -29,8 +29,9 @@
 #' **Cutoff.** The default flags the fastest respondents: the cutoff is the
 #' empirical lower `fpr` quantile of the observed times (the 5th percentile by
 #' default), and respondents at or below it are flagged. This is a **ranking**
-#' convention -- a sample percentile flags `fpr` of respondents by construction --
-#' not a calibrated false-positive rate. Override it with **one** of three
+#' convention -- a sample percentile flags **at least** `fpr` of respondents (more
+#' when scores tie at the cutoff) -- not a calibrated false-positive rate. Override
+#' it with **one** of three
 #' mutually exclusive arguments:
 #' - `fpr`, a different target tail mass for the percentile;
 #' - `frac_median`, a **median-relative** rule flagging respondents faster than

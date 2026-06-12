@@ -73,8 +73,9 @@ index on a scale that pairs forward and reverse items. Use
 \strong{Cutoff.} The default flags the lowest-opposition respondents: the cutoff is
 the empirical \code{1 - fpr} quantile of the observed scores (the 95th percentile by
 default) and respondents at or above it are flagged. This is a \strong{ranking}
-convention -- a sample percentile flags \code{fpr} of respondents by construction --
-not a calibrated false-positive rate. Adjust the target tail with \code{fpr}, or
+convention -- a sample percentile flags \strong{at least} \code{fpr} of respondents (more
+when scores tie at the cutoff) -- not a calibrated false-positive rate. Adjust
+the target tail with \code{fpr}, or
 pass an absolute \code{cutoff} in \verb{[-1, 1]} to flag on a literal correlation
 threshold. \code{fpr} and \code{cutoff} are mutually exclusive.
 

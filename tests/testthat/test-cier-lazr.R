@@ -35,7 +35,10 @@ john_matrix <- function(extra_rows = 0L) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_lazr returns a list-based cier_index schema", {
-  out <- cier_lazr(lazr_fixture(n = 12L))
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  out <- suppressWarnings(cier_lazr(lazr_fixture(n = 12L)))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -50,7 +53,7 @@ test_that("cier_lazr returns a list-based cier_index schema", {
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_lazr(lazr_fixture(n = 8L)))
+  df <- as.data.frame(suppressWarnings(cier_lazr(lazr_fixture(n = 8L))))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 8L)
@@ -59,14 +62,14 @@ test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
 # ---- Published worked examples (the spec) -----------------------------------
 
 test_that("cier_lazr reproduces John's worked example (Eq. 4): 33/49", {
-  out <- cier_lazr(john_matrix())
+  out <- suppressWarnings(cier_lazr(john_matrix()))
   expect_equal(out$value[[1L]], 33 / 49, tolerance = 1e-12)
 })
 
 test_that("footnote-2 one-liner: Laz.R(c(1,2,3,4,5,4,3,2,1,2)) = 2/3", {
   m <- matrix(c(1, 2, 3, 4, 5, 4, 3, 2, 1, 2), nrow = 1L)
   storage.mode(m) <- "double"
-  expect_equal(cier_lazr(m)$value[[1L]], 2 / 3, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_lazr(m))$value[[1L]], 2 / 3, tolerance = 1e-12)
 })
 
 test_that("the oracle reproduces the paper's John transition matrix", {
@@ -94,24 +97,29 @@ test_that("NA transitions drop from the denominator (drop-NA, not N-1)", {
   row <- c(1, 2, NA, 4, 3, 2, 1, 2, 3, 4)
   m <- matrix(row, nrow = 1L)
   storage.mode(m) <- "double"
-  out <- cier_lazr(m)
+  out <- suppressWarnings(cier_lazr(m))
   expect_equal(out$value[[1L]], 5 / 7, tolerance = 1e-12)        # NOT 5/9
   expect_equal(out$value[[1L]], ref_lazr_row(row)$value, tolerance = 1e-12)
 })
 
 # ---- Convention pins --------------------------------------------------------
 
-test_that("a straightliner scores exactly 1 and is flagged, never NA", {
-  out <- cier_lazr(matrix(rep(3, 10L), nrow = 1L))
+test_that("a straightliner scores exactly 1 (zero-variance chain -> 1, never NA)", {
+  # The value convention: a zero-variance row has maximal predictability 1, not
+  # NA. A lone respondent cannot resolve a percentile cutoff (D2), so it is not
+  # flagged here; flagging once the cutoff is resolvable is pinned by the
+  # direction test below.
+  expect_warning(out <- cier_lazr(matrix(rep(3, 10L), nrow = 1L)),
+                 class = "cier_warning_insufficient_items")
   expect_identical(out$value, 1)
   expect_false(is.na(out$value))
-  expect_true(out$flagged[[1L]])
+  expect_false(out$flagged[[1L]])
 })
 
 test_that("a diagonal-liner (1..5 repeated) scores 1 (deterministic chain)", {
   m <- matrix(rep_len(1:5, 20L), nrow = 1L)
   storage.mode(m) <- "double"
-  expect_equal(cier_lazr(m)$value[[1L]], 1, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_lazr(m))$value[[1L]], 1, tolerance = 1e-12)
 })
 
 test_that("values are bounded in (0, 1]", {
@@ -125,8 +133,10 @@ test_that("value is invariant to a constant integer shift (anchor-count-free)", 
   # mutant that hard-codes anchors 1..max (ignoring the base) fails the 0-based
   # recoding here.
   x <- lazr_fixture(n = 15L, p = 20L)
-  expect_equal(cier_lazr(x)$value, cier_lazr(x + 10L)$value, tolerance = 1e-12)
-  expect_equal(cier_lazr(x)$value, cier_lazr(x - 1L)$value, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_lazr(x))$value,
+               suppressWarnings(cier_lazr(x + 10L))$value, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_lazr(x))$value,
+               suppressWarnings(cier_lazr(x - 1L))$value, tolerance = 1e-12)
 })
 
 test_that("a stray large integer does not inflate the bin space (overflow guard)", {
@@ -139,9 +149,10 @@ test_that("a stray large integer does not inflate the bin space (overflow guard)
   x <- lazr_fixture(n = 10L, p = 20L)
   with_sentinel <- x
   with_sentinel[1L, 5L] <- 1e5
-  out <- expect_no_error(cier_lazr(with_sentinel))
+  out <- expect_no_error(suppressWarnings(cier_lazr(with_sentinel)))
   expect_equal(out$value, ref_lazr(with_sentinel), tolerance = 1e-12)
-  expect_equal(out$value[-1L], cier_lazr(x)$value[-1L], tolerance = 1e-12)
+  expect_equal(out$value[-1L], suppressWarnings(cier_lazr(x))$value[-1L],
+               tolerance = 1e-12)
 })
 
 # ---- Abstention / NA edges --------------------------------------------------
@@ -153,7 +164,7 @@ test_that("an all-NA row abstains and keeps rows aligned", {
     c(5, 4, 3, 2, 1, 2, 3, 4, 5, 4)
   )
   storage.mode(m) <- "double"
-  out <- cier_lazr(m)
+  out <- suppressWarnings(cier_lazr(m))
   expect_true(is.na(out$value[[2L]]))
   expect_true(is.na(out$flagged[[2L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -169,7 +180,7 @@ test_that("a single valid transition abstains (the < 2 rule)", {
     c(1, 2, 3, 4, 5, 4, 3, 2, 1, 2)
   )
   storage.mode(m) <- "double"
-  out <- cier_lazr(m)
+  out <- suppressWarnings(cier_lazr(m))
   expect_true(is.na(out$value[[1L]]))
   expect_true(is.na(out$flagged[[1L]]))
   expect_false(is.na(out$value[[2L]]))
@@ -180,7 +191,7 @@ test_that("exactly two valid transitions scores (the < 2 boundary, positive edge
   # Pins the positive edge so a regression to an `n >= 1` rule is visible.
   m <- matrix(c(2, 5, 1, rep(NA_real_, 7L)), nrow = 1L)
   storage.mode(m) <- "double"
-  out <- cier_lazr(m)
+  out <- suppressWarnings(cier_lazr(m))
   expect_false(is.na(out$value[[1L]]))
   expect_true(is.finite(out$value[[1L]]))
 })

@@ -51,8 +51,11 @@ prescore <- function(x, items) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_even_odd returns a list-based cier_index with the pinned schema", {
-  out <- cier_even_odd(rand_matrix(20L, 12L, 1L),
-                       blocked_items(3L, 4L, reverse_keyed = FALSE))
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  out <- suppressWarnings(cier_even_odd(rand_matrix(20L, 12L, 1L), it))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -67,8 +70,8 @@ test_that("cier_even_odd returns a list-based cier_index with the pinned schema"
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_even_odd(rand_matrix(20L, 12L, 2L),
-                                    blocked_items(3L, 4L, reverse_keyed = FALSE)))
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  df <- as.data.frame(suppressWarnings(cier_even_odd(rand_matrix(20L, 12L, 2L), it)))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 20L)
@@ -79,7 +82,7 @@ test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
 test_that("cier_even_odd$value equals the oracle on a complete matrix", {
   it <- blocked_items(5L, 5L, reverse_keyed = FALSE)
   x <- rand_matrix(30L, 25L, 2026L)
-  expect_equal(cier_even_odd(x, it)$value,
+  expect_equal(suppressWarnings(cier_even_odd(x, it))$value,
                ref_even_odd(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
 
@@ -88,7 +91,7 @@ test_that("cier_even_odd$value equals the oracle when rows carry NAs", {
   x <- rand_matrix(30L, 25L, 99L)
   x[3L, c(1L, 2L)] <- NA       # thins one scale's even/odd side (still a pair)
   x[10L, 1L:23L] <- NA         # only the last scale keeps a pair -> row NA
-  expect_equal(cier_even_odd(x, it)$value,
+  expect_equal(suppressWarnings(cier_even_odd(x, it))$value,
                ref_even_odd(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
 
@@ -100,14 +103,14 @@ test_that("a perfectly consistent respondent scores -1", {
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- matrix(c(1, 1, 5, 5), nrow = 1L)
   storage.mode(x) <- "double"
-  expect_equal(cier_even_odd(x, it)$value, -1, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_even_odd(x, it))$value, -1, tolerance = 1e-12)
 })
 
 test_that("a perfectly inversely consistent respondent scores +1", {
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- matrix(c(1, 5, 5, 1), nrow = 1L)
   storage.mode(x) <- "double"
-  expect_equal(cier_even_odd(x, it)$value, 1, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_even_odd(x, it))$value, 1, tolerance = 1e-12)
 })
 
 # ---- Split function + block builder ----------------------------------------
@@ -144,7 +147,7 @@ test_that("cier_even_odd groups by scale label on an interleaved layout (oracle 
   it <- data.frame(scale = rep(c("A", "B", "C"), times = 4L),
                    reverse_keyed = FALSE)
   x <- rand_matrix(20L, 12L, 21L)
-  expect_equal(cier_even_odd(x, it)$value,
+  expect_equal(suppressWarnings(cier_even_odd(x, it))$value,
                ref_even_odd(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
 
@@ -153,7 +156,7 @@ test_that("cier_even_odd groups by scale label on an interleaved layout (oracle 
 test_that("direction is upper: a careless (high) row flags, a consistent one does not", {
   # A flag-lower mutant inverts both assertions.
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_even_odd(rand_matrix(40L, 20L, 11L), it)
+  out <- suppressWarnings(cier_even_odd(rand_matrix(40L, 20L, 11L), it))
   expect_true(out$flagged[[which.max(out$value)]])
   expect_false(out$flagged[[which.min(out$value)]])
   expect_identical(out$flagged, !is.na(out$value) & out$value >= out$cutoff)
@@ -162,7 +165,7 @@ test_that("direction is upper: a careless (high) row flags, a consistent one doe
 test_that("default cutoff is the upper-tail 95th percentile (NO-FLIP)", {
   # Upper takes the 1 - fpr quantile directly; a double-flip mutant uses fpr.
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_even_odd(rand_matrix(60L, 20L, 5L), it)
+  out <- suppressWarnings(cier_even_odd(rand_matrix(60L, 20L, 5L), it))
   expect_equal(out$cutoff,
                as.numeric(stats::quantile(out$value[is.finite(out$value)],
                                           0.95, names = FALSE, type = 7L)),
@@ -171,7 +174,7 @@ test_that("default cutoff is the upper-tail 95th percentile (NO-FLIP)", {
 
 test_that("the fpr argument moves the percentile target", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_even_odd(rand_matrix(60L, 20L, 5L), it, fpr = 0.10)
+  out <- suppressWarnings(cier_even_odd(rand_matrix(60L, 20L, 5L), it, fpr = 0.10))
   expect_equal(out$cutoff,
                as.numeric(stats::quantile(out$value[is.finite(out$value)],
                                           0.90, names = FALSE, type = 7L)),
@@ -188,15 +191,15 @@ test_that("honouring reverse_keyed equals independently pre-scoring the items", 
   x <- rand_matrix(25L, 16L, 101L)
   it_fwd <- it_rev
   it_fwd$reverse_keyed <- FALSE
-  honoured  <- cier_even_odd(x, it_rev)$value
-  prescored <- cier_even_odd(prescore(x, it_rev), it_fwd)$value
+  honoured  <- suppressWarnings(cier_even_odd(x, it_rev))$value
+  prescored <- suppressWarnings(cier_even_odd(prescore(x, it_rev), it_fwd))$value
   expect_equal(honoured, prescored, tolerance = 1e-12)
 })
 
 test_that("honoured reverse-keying also equals the oracle on pre-scored input", {
   it_rev <- blocked_items(4L, 4L)
   x <- rand_matrix(25L, 16L, 7L)
-  expect_equal(cier_even_odd(x, it_rev)$value,
+  expect_equal(suppressWarnings(cier_even_odd(x, it_rev))$value,
                ref_even_odd(prescore(x, it_rev), blocks_from_scale(it_rev)),
                tolerance = 1e-12)
 })
@@ -284,7 +287,7 @@ test_that("responses outside the declared reverse-keying range are a typed error
   # Declaring the true range scores cleanly (the guard keys on the declaration).
   it$min <- 0L
   it$max <- 4L
-  expect_s3_class(cier_even_odd(x, it), "cier_index")
+  expect_s3_class(suppressWarnings(cier_even_odd(x, it)), "cier_index")
   # A declared max SMALLER than the data is the other direction: 1..5 data
   # with max = 3 would reflect 5 -> -1.
   it2 <- blocked_items(3L, 4L, max = 3L)
@@ -328,8 +331,8 @@ test_that("even-odd is invariant to the response-scale base when min is declared
   it0$min <- 0L
   it0$max <- 4L
   x0 <- x1 - 1L                            # SAME information, 0..4 coding
-  expect_equal(cier_even_odd(x1, it1)$value,
-               cier_even_odd(x0, it0)$value, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_even_odd(x1, it1))$value,
+               suppressWarnings(cier_even_odd(x0, it0))$value, tolerance = 1e-12)
 })
 
 test_that("omitting min reproduces an explicit min = 1 (default base, end-to-end)", {
@@ -339,8 +342,8 @@ test_that("omitting min reproduces an explicit min = 1 (default base, end-to-end
   it_min1 <- it_no_min
   it_min1$min <- 1L
   x <- rand_matrix(30L, 16L, 7L)
-  expect_equal(cier_even_odd(x, it_no_min)$value,
-               cier_even_odd(x, it_min1)$value, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_even_odd(x, it_no_min))$value,
+               suppressWarnings(cier_even_odd(x, it_min1))$value, tolerance = 1e-12)
 })
 
 test_that("off-midpoint straightliner is scored, not abstained, with reverse-keying", {
@@ -352,7 +355,7 @@ test_that("off-midpoint straightliner is scored, not abstained, with reverse-key
   filler <- rand_matrix(8L, 16L, 51L)           # so the percentile cutoff resolves
   x <- rbind(rep(5, 16L), rep(3, 16L), filler)  # row 1 off-midpoint, row 2 midpoint
   storage.mode(x) <- "double"
-  out <- cier_even_odd(x, it)
+  out <- suppressWarnings(cier_even_odd(x, it))
   expect_false(is.na(out$value[[1L]]))          # off-midpoint constant -> finite score
   expect_true(is.na(out$value[[2L]]))           # midpoint constant -> reflects to itself -> NA
 })
@@ -365,8 +368,8 @@ test_that("reverse_keyed and max are optional when nothing is reverse-keyed", {
   it_scale_only <- data.frame(scale = rep(LETTERS[1:3], each = 4L))
   it_fwd <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(20L, 12L, 3L)
-  expect_equal(cier_even_odd(x, it_scale_only)$value,
-               cier_even_odd(x, it_fwd)$value, tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_even_odd(x, it_scale_only))$value,
+               suppressWarnings(cier_even_odd(x, it_fwd))$value, tolerance = 1e-12)
 })
 
 # ---- Edge cases -------------------------------------------------------------
@@ -377,7 +380,7 @@ test_that("a single-item scale is skipped; remaining scales still score", {
   x <- matrix(c(3, 1, 5, 2, 4,
                 4, 2, 4, 1, 5), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
-  out <- cier_even_odd(x, it)
+  out <- suppressWarnings(cier_even_odd(x, it))
   expect_false(any(is.na(out$value)))     # scales B and C give two finite pairs
   expect_equal(out$value, ref_even_odd(x, blocks_from_scale(it)),
                tolerance = 1e-12)
@@ -387,7 +390,7 @@ test_that("a constant (straightliner) row abstains (zero variance -> NA)", {
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(6L, 12L, 4L)
   x[2L, ] <- 3                            # constant -> identical even/odd means
-  out <- cier_even_odd(x, it)
+  out <- suppressWarnings(cier_even_odd(x, it))
   expect_true(is.na(out$value[[2L]]))
   expect_false(is.na(out$value[[1L]]))
 })
@@ -396,7 +399,7 @@ test_that("an all-NA row abstains and keeps the remaining rows aligned", {
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(10L, 12L, 4L)
   x[5L, ] <- NA
-  out <- cier_even_odd(x, it)
+  out <- suppressWarnings(cier_even_odd(x, it))
   expect_true(is.na(out$value[[5L]]))
   expect_true(is.na(out$flagged[[5L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -460,7 +463,7 @@ test_that("an absolute cutoff overrides the percentile and flags via the upper t
 test_that("a respondent exactly at the cutoff is flagged (>= ties, not >)", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(30L, 20L, 7L)
-  v <- cier_even_odd(x, it)$value
+  v <- suppressWarnings(cier_even_odd(x, it))$value
   k <- which.max(v)
   out <- cier_even_odd(x, it, cutoff = v[[k]])
   expect_true(out$flagged[[k]])
@@ -510,7 +513,7 @@ test_that("cier_even_odd matches careless::evenodd bytewise on no-reverse data",
   # does not reverse-key), so max is not even required here.
   it <- data.frame(scale = rep(paste0("s", LETTERS[1:10]), each = 5L),
                    reverse_keyed = FALSE, stringsAsFactors = FALSE)
-  ours <- cier_even_odd(responses, it)$value
+  ours <- suppressWarnings(cier_even_odd(responses, it))$value
   theirs <- suppressWarnings(careless::evenodd(raw, factors = rep(5L, 10L)))
   expect_equal(ours, as.numeric(theirs), tolerance = 0)
 })
@@ -520,15 +523,19 @@ test_that("cier_even_odd matches careless::evenodd bytewise on no-reverse data",
 test_that("print renders the locked cli summary (upper direction)", {
   withr::with_options(list(cli.width = 80, cli.unicode = FALSE), {
     it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
-    expect_snapshot(print(cier_even_odd(rand_matrix(11L, 12L, 11L), it)))
+    # WP3: 24 rows keep the percentile cutoff resolvable (>= 20 scored, D2), so
+    # the snapshot locks the resolved-cutoff summary format; suppressWarnings keeps
+    # the saturation note (even-odd's +1 point mass) out of the captured print.
+    out <- suppressWarnings(cier_even_odd(rand_matrix(24L, 12L, 11L), it))
+    expect_snapshot(print(out))
   })
 })
 
 test_that("print reports abstaining respondents on their own line", {
   withr::with_options(list(cli.width = 80, cli.unicode = FALSE), {
     it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
-    x <- rand_matrix(11L, 12L, 11L)
-    x <- rbind(x, rep(NA_real_, 12L))
-    expect_snapshot(print(cier_even_odd(x, it)))
+    x <- rbind(rand_matrix(24L, 12L, 11L), rep(NA_real_, 12L))
+    out <- suppressWarnings(cier_even_odd(x, it))
+    expect_snapshot(print(out))
   })
 })

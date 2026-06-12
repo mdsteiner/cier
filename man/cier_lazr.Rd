@@ -50,8 +50,9 @@ no scale blocking.
 \strong{Cutoff.} The default flags the most predictable respondents: the cutoff is
 the empirical upper \code{fpr} quantile of the observed scores (the 95th percentile
 by default) -- the convention Biemann et al.'s own studies use, where they
-flag the top 5\%. This is cier's single-\code{fpr}-knob \strong{ranking} convention, not
-a calibrated false-positive rate. Override it with \strong{one} of three mutually
+flag the top 5\%. This is cier's single-\code{fpr}-knob \strong{ranking} convention -- it
+flags \strong{at least} \code{fpr} of respondents (more when scores tie at the cutoff),
+not a calibrated false-positive rate. Override it with \strong{one} of three mutually
 exclusive arguments:
 \itemize{
 \item \code{fpr}, a different target upper-tail mass for the percentile;

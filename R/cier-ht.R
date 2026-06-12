@@ -41,8 +41,9 @@
 #' **Cutoff -- an empirical percentile (a ranking convention).** Ht's default
 #' cutoff is the `fpr` quantile of the observed scores (the 5th percentile by
 #' default); respondents at or below it are flagged. This is a **ranking**
-#' convention -- a sample percentile flags `fpr` of respondents by construction --
-#' not a calibrated false-positive rate. Unlike [cier_gnormed()], Ht has **no
+#' convention -- a sample percentile flags **at least** `fpr` of respondents (more
+#' when scores tie at the cutoff) -- not a calibrated false-positive rate. Unlike
+#' [cier_gnormed()], Ht has **no
 #' Monte-Carlo null**: a model-conforming simulated null is available only for
 #' `PerFit`'s own dichotomous Ht, not for the polytomous `mokken` statistic
 #' computed here. Adjust the target tail with `fpr`, or pass an absolute `cutoff`

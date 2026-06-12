@@ -30,7 +30,10 @@ present_fixture <- function() {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_irv returns a list-based cier_index with the pinned schema", {
-  out <- cier_irv(present_fixture())
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  out <- suppressWarnings(cier_irv(present_fixture()))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -45,7 +48,7 @@ test_that("cier_irv returns a list-based cier_index with the pinned schema", {
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_irv(present_fixture()))
+  df <- as.data.frame(suppressWarnings(cier_irv(present_fixture())))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 4L)
@@ -57,7 +60,7 @@ test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
 
 test_that("cier_irv$value equals the hand-rolled oracle on the fixture", {
   x <- present_fixture()
-  expect_equal(cier_irv(x)$value, ref_irv(x), tolerance = 1e-10)
+  expect_equal(suppressWarnings(cier_irv(x))$value, ref_irv(x), tolerance = 1e-10)
 })
 
 test_that("cier_irv$value equals the oracle on a random complete matrix", {
@@ -119,20 +122,21 @@ test_that("cier_irv matches careless::irv on NA-bearing rows incl. abstention", 
 # ---- Property / invariant + mutant-killers ----------------------------------
 
 test_that("a constant row has IRV exactly 0, never NA (constant->NA mutant)", {
-  expect_identical(cier_irv(matrix(rep(3, 10L), nrow = 1L))$value, 0)
+  expect_identical(suppressWarnings(cier_irv(matrix(rep(3, 10L), nrow = 1L)))$value,
+                   0)
 })
 
 test_that("IRV is the SAMPLE sd (denominator n-1), not the population sd", {
   # c(1, 5): mean 3, ss = 8. sample sd = sqrt(8/1) = sqrt(8); a population-sd
   # mutant (divide by n) would return sqrt(8/2) = 2. sqrt(8) ~ 2.828 vs 2.
-  expect_equal(cier_irv(matrix(c(1, 5), nrow = 1L))$value, sqrt(8),
+  expect_equal(suppressWarnings(cier_irv(matrix(c(1, 5), nrow = 1L)))$value, sqrt(8),
                tolerance = 1e-10)
 })
 
 test_that("na.rm is honoured: an NA-bearing row scores over present items", {
   # c(1, 5, NA): present (1, 5) -> sqrt(8). A mutant dropping na.rm = TRUE would
   # see an NA in the row and return NA for the whole respondent.
-  out <- cier_irv(matrix(c(1, 5, NA), nrow = 1L))$value
+  out <- suppressWarnings(cier_irv(matrix(c(1, 5, NA), nrow = 1L)))$value
   expect_false(is.na(out))
   expect_equal(out, sqrt(8), tolerance = 1e-10)
 })
@@ -174,7 +178,7 @@ test_that("an all-NA row abstains and an abstainer keeps rows aligned", {
       3, 3, 3, 3, 3),        # row 3: constant, sd 0
     nrow = 3L, byrow = TRUE
   )
-  out <- cier_irv(x)
+  out <- suppressWarnings(cier_irv(x))
   expect_true(is.na(out$value[[2L]]))
   expect_true(is.na(out$flagged[[2L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -191,7 +195,7 @@ test_that("a row with a single present value abstains (value NA, flagged NA)", {
       3, NA, NA, NA, NA),     # one present value -> abstains
     nrow = 3L, byrow = TRUE
   )
-  out <- cier_irv(x)
+  out <- suppressWarnings(cier_irv(x))
   expect_true(is.na(out$value[[3L]]))
   expect_true(is.na(out$flagged[[3L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -211,11 +215,38 @@ test_that("a single-column matrix abstains for every row and flags nobody", {
   expect_true(all(is.na(out$flagged)))
 })
 
-test_that("a wholly constant matrix scores 0 for every row and flags all", {
-  out <- cier_irv(matrix(rep(2, 12L), nrow = 2L))
-  expect_identical(out$value, c(0, 0))
-  expect_identical(out$cutoff, 0)
-  expect_identical(out$flagged, c(TRUE, TRUE))   # 0 <= 0 (lower, ties flag)
+test_that("a constant matrix abstains rather than flagging 100% (F02/F18)", {
+  # The reported bug: a constant score distribution flagged EVERY respondent at
+  # any fpr. With 25 rows the small-sample guard (D2) is satisfied, so this
+  # isolates D1: the cutoff would flag everyone, so it abstains (NA + warning) and
+  # flags nobody. Values are still the exact IRV scores (0); only the cutoff moves.
+  expect_warning(out <- cier_irv(matrix(rep(2, 25L * 6L), nrow = 25L)),
+                 class = "cier_warning_insufficient_items")
+  expect_true(all(out$value == 0))
+  expect_identical(out$cutoff, NA_real_)
+  expect_false(any(out$flagged))                 # NA cutoff -> nobody flagged
+})
+
+test_that("a single respondent abstains rather than flagging itself (F37)", {
+  # The reported bug: n = 1 flagged the only respondent even on a perfect score.
+  # A 5%-tail cutoff needs >= 20 scored respondents (D2), so a lone respondent
+  # abstains. Its value is still computed (the sd of 1..5); only the cutoff moves.
+  expect_warning(out <- cier_irv(matrix(c(1, 2, 3, 4, 5), nrow = 1L)),
+                 class = "cier_warning_insufficient_items")
+  expect_false(is.na(out$value))
+  expect_identical(out$cutoff, NA_real_)
+  expect_false(out$flagged[[1L]])
+})
+
+test_that("on healthy continuous data the realised rate tracks fpr (no regression)", {
+  # The guards must not perturb clean data: on continuous scores the percentile
+  # cutoff still flags about fpr by construction (no tie mass, no degeneracy).
+  withr::with_seed(123L,
+                   x <- matrix(stats::runif(1000L * 12L, 1, 5), nrow = 1000L))
+  for (f in c(0.01, 0.05, 0.10)) {
+    fl <- cier_irv(x, fpr = f)$flagged
+    expect_lt(abs(mean(fl) - f), 0.015)
+  }
 })
 
 # ---- Cutoff: default, fpr override, NO-FLIP direction ------------------------

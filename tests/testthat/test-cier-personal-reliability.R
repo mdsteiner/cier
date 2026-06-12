@@ -54,9 +54,13 @@ prescore <- function(x, items) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_personal_reliability returns the pinned list-based schema", {
-  out <- cier_personal_reliability(rand_matrix(20L, 12L, 1L),
-                                   blocked_items(3L, 4L, reverse_keyed = FALSE),
-                                   resample = FALSE)
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(20L, 12L, 1L), it, resample = FALSE)
+  )
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -71,9 +75,10 @@ test_that("cier_personal_reliability returns the pinned list-based schema", {
 })
 
 test_that("the schema is identical for the RPR (default) variant", {
-  out <- cier_personal_reliability(rand_matrix(20L, 12L, 1L),
-                                   blocked_items(3L, 4L, reverse_keyed = FALSE),
-                                   seed = 1L)
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(20L, 12L, 1L), it, seed = 1L)
+  )
   expect_s3_class(out, "cier_index")
   expect_identical(out$method, "cier_personal_reliability")
   expect_identical(out$direction, "upper")
@@ -81,9 +86,10 @@ test_that("the schema is identical for the RPR (default) variant", {
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  out <- cier_personal_reliability(rand_matrix(20L, 12L, 2L),
-                                   blocked_items(3L, 4L, reverse_keyed = FALSE),
-                                   resample = FALSE)
+  it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(20L, 12L, 2L), it, resample = FALSE)
+  )
   df <- as.data.frame(out)
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
@@ -95,7 +101,8 @@ test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
 test_that("PR $value equals the ref_pr oracle on a complete matrix", {
   it <- blocked_items(5L, 5L, reverse_keyed = FALSE)
   x <- rand_matrix(30L, 25L, 2026L)
-  expect_equal(cier_personal_reliability(x, it, resample = FALSE)$value,
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it,
+                                                          resample = FALSE))$value,
                ref_pr(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
 
@@ -104,7 +111,8 @@ test_that("PR $value equals the ref_pr oracle when rows carry NAs", {
   x <- rand_matrix(30L, 25L, 99L)
   x[3L, c(1L, 2L)] <- NA       # thins one scale's first half (still a pair)
   x[10L, 1L:23L] <- NA         # only the last scale keeps a pair -> row NA
-  expect_equal(cier_personal_reliability(x, it, resample = FALSE)$value,
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it,
+                                                          resample = FALSE))$value,
                ref_pr(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
 
@@ -148,7 +156,9 @@ test_that("RPR averages only the finite iterations when a row abstains on some",
   })
   col1 <- per_iter[, 1L]
   expect_true(anyNA(col1) && any(!is.na(col1)))        # genuinely mixed iterations
-  out <- cier_personal_reliability(x, it, n_resamples = 25L, seed = 123L)
+  out <- suppressWarnings(
+    cier_personal_reliability(x, it, n_resamples = 25L, seed = 123L)
+  )
   expect_false(is.na(out$value[[1L]]))                 # finite iterations averaged
   expect_equal(out$value[[1L]], mean(col1, na.rm = TRUE), tolerance = 1e-10)
   expect_equal(out$value, ref_rpr(x, blocks, 25L, 123L), tolerance = 1e-10)
@@ -157,7 +167,8 @@ test_that("RPR averages only the finite iterations when a row abstains on some",
 test_that("RPR with n_resamples = 1 equals a single seeded iteration", {
   it <- blocked_items(4L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(15L, 16L, 5L)
-  expect_equal(cier_personal_reliability(x, it, n_resamples = 1L, seed = 3L)$value,
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it, n_resamples = 1L,
+                                                          seed = 3L))$value,
                ref_rpr(x, blocks_from_scale(it), 1L, 3L), tolerance = 1e-10)
 })
 
@@ -179,16 +190,18 @@ test_that("a perfectly consistent respondent scores -1 (PR)", {
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- matrix(c(1, 1, 5, 5), nrow = 1L)
   storage.mode(x) <- "double"
-  expect_equal(cier_personal_reliability(x, it, resample = FALSE)$value, -1,
-               tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it,
+                                                          resample = FALSE))$value,
+               -1, tolerance = 1e-12)
 })
 
 test_that("a perfectly inversely consistent respondent scores +1 (PR)", {
   it <- blocked_items(2L, 2L, reverse_keyed = FALSE)
   x <- matrix(c(1, 5, 5, 1), nrow = 1L)
   storage.mode(x) <- "double"
-  expect_equal(cier_personal_reliability(x, it, resample = FALSE)$value, 1,
-               tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it,
+                                                          resample = FALSE))$value,
+               1, tolerance = 1e-12)
 })
 
 # ---- Split function + first/second-half vs even/odd ------------------------
@@ -211,8 +224,8 @@ test_that("PR uses the first/second-half split, NOT even/odd", {
   # against ref_pr AND shows it diverges from even-odd.
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(20L, 12L, 21L)
-  pr <- cier_personal_reliability(x, it, resample = FALSE)$value
-  eo <- cier_even_odd(x, it)$value
+  pr <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))$value
+  eo <- suppressWarnings(cier_even_odd(x, it))$value
   expect_equal(pr, ref_pr(x, blocks_from_scale(it)), tolerance = 1e-12)
   expect_false(isTRUE(all.equal(pr, eo)))
 })
@@ -226,7 +239,9 @@ test_that("RPR averages the per-iteration -SB values, not the raw correlations",
   # value-level aggregation; here we additionally bound the result to [-1, 1].
   it <- blocked_items(5L, 5L, reverse_keyed = FALSE)
   x <- rand_matrix(40L, 25L, 13L)
-  v <- cier_personal_reliability(x, it, n_resamples = 25L, seed = 11L)$value
+  v <- suppressWarnings(
+    cier_personal_reliability(x, it, n_resamples = 25L, seed = 11L)
+  )$value
   expect_equal(v, ref_rpr(x, blocks_from_scale(it), 25L, 11L), tolerance = 1e-10)
   finite <- v[is.finite(v)]
   expect_true(all(finite >= -1 - 1e-9 & finite <= 1 + 1e-9))
@@ -279,7 +294,8 @@ test_that("RPR draws NO permutation for a one-item scale (seed stays in sync)", 
   it <- data.frame(scale = c("A", "B", "B", "C", "C", "C", "D", "D"),
                    reverse_keyed = FALSE, max = 5L)
   x <- rand_matrix(20L, 8L, 314L)
-  expect_equal(cier_personal_reliability(x, it, n_resamples = 25L, seed = 5L)$value,
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it, n_resamples = 25L,
+                                                          seed = 5L))$value,
                ref_rpr(x, blocks_from_scale(it), 25L, 5L), tolerance = 1e-10)
 })
 
@@ -290,7 +306,9 @@ test_that("the default variant is RPR, not deterministic PR", {
   x <- rand_matrix(30L, 16L, 4L)
   default_v <- cier_personal_reliability(x, it, seed = 1L)$value          # default
   rpr_v     <- cier_personal_reliability(x, it, resample = TRUE, seed = 1L)$value
-  pr_v      <- cier_personal_reliability(x, it, resample = FALSE)$value
+  pr_v      <- suppressWarnings(
+    cier_personal_reliability(x, it, resample = FALSE)
+  )$value
   expect_identical(default_v, rpr_v)                 # default == explicit RPR
   expect_false(isTRUE(all.equal(default_v, pr_v)))   # default != PR
 })
@@ -300,21 +318,24 @@ test_that("PR ignores seed and n_resamples (deterministic)", {
   # resampling controls -- its value is identical with or without them.
   it <- blocked_items(4L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(20L, 16L, 4L)
-  base <- cier_personal_reliability(x, it, resample = FALSE)$value
-  expect_identical(base,
-                   cier_personal_reliability(x, it, resample = FALSE,
-                                             seed = 99L)$value)
-  expect_identical(base,
-                   cier_personal_reliability(x, it, resample = FALSE,
-                                             n_resamples = 3L)$value)
+  base <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))$value
+  with_seed <- suppressWarnings(
+    cier_personal_reliability(x, it, resample = FALSE, seed = 99L)
+  )$value
+  with_resamples <- suppressWarnings(
+    cier_personal_reliability(x, it, resample = FALSE, n_resamples = 3L)
+  )$value
+  expect_identical(base, with_seed)
+  expect_identical(base, with_resamples)
 })
 
 # ---- Direction (upper, NO-FLIP) --------------------------------------------
 
 test_that("direction is upper: a careless (high) row flags, a consistent one does not", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_personal_reliability(rand_matrix(40L, 20L, 11L), it,
-                                   resample = FALSE)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(40L, 20L, 11L), it, resample = FALSE)
+  )
   expect_true(out$flagged[[which.max(out$value)]])
   expect_false(out$flagged[[which.min(out$value)]])
   expect_identical(out$flagged, !is.na(out$value) & out$value >= out$cutoff)
@@ -322,8 +343,9 @@ test_that("direction is upper: a careless (high) row flags, a consistent one doe
 
 test_that("default cutoff is the upper-tail 95th percentile (NO-FLIP)", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_personal_reliability(rand_matrix(60L, 20L, 5L), it,
-                                   resample = FALSE)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(60L, 20L, 5L), it, resample = FALSE)
+  )
   expect_equal(out$cutoff,
                as.numeric(stats::quantile(out$value[is.finite(out$value)],
                                           0.95, names = FALSE, type = 7L)),
@@ -341,8 +363,9 @@ test_that("the cutoff is the 95th percentile for the RPR (default) variant too",
 
 test_that("the fpr argument moves the percentile target", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
-  out <- cier_personal_reliability(rand_matrix(60L, 20L, 5L), it,
-                                   resample = FALSE, fpr = 0.10)
+  out <- suppressWarnings(
+    cier_personal_reliability(rand_matrix(60L, 20L, 5L), it, resample = FALSE, fpr = 0.10)
+  )
   expect_equal(out$cutoff,
                as.numeric(stats::quantile(out$value[is.finite(out$value)],
                                           0.90, names = FALSE, type = 7L)),
@@ -356,16 +379,20 @@ test_that("honouring reverse_keyed equals independently pre-scoring (PR)", {
   x <- rand_matrix(25L, 16L, 101L)
   it_fwd <- it_rev
   it_fwd$reverse_keyed <- FALSE
-  honoured  <- cier_personal_reliability(x, it_rev, resample = FALSE)$value
-  prescored <- cier_personal_reliability(prescore(x, it_rev), it_fwd,
-                                         resample = FALSE)$value
+  honoured  <- suppressWarnings(
+    cier_personal_reliability(x, it_rev, resample = FALSE)
+  )$value
+  prescored <- suppressWarnings(
+    cier_personal_reliability(prescore(x, it_rev), it_fwd, resample = FALSE)
+  )$value
   expect_equal(honoured, prescored, tolerance = 1e-12)
 })
 
 test_that("honoured PR reverse-keying also equals the oracle on pre-scored input", {
   it_rev <- blocked_items(4L, 4L)
   x <- rand_matrix(25L, 16L, 7L)
-  expect_equal(cier_personal_reliability(x, it_rev, resample = FALSE)$value,
+  expect_equal(suppressWarnings(cier_personal_reliability(x, it_rev,
+                                                          resample = FALSE))$value,
                ref_pr(prescore(x, it_rev), blocks_from_scale(it_rev)),
                tolerance = 1e-12)
 })
@@ -404,7 +431,7 @@ test_that("a single-item scale is skipped; remaining scales still score (PR)", {
   x <- matrix(c(3, 1, 5, 2, 4,
                 4, 2, 4, 1, 5), nrow = 2L, byrow = TRUE)
   storage.mode(x) <- "double"
-  out <- cier_personal_reliability(x, it, resample = FALSE)
+  out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
   expect_false(any(is.na(out$value)))     # scales B and C give two finite pairs
   expect_equal(out$value, ref_pr(x, blocks_from_scale(it)), tolerance = 1e-12)
 })
@@ -413,7 +440,7 @@ test_that("a constant (straightliner) row abstains (zero variance -> NA, PR)", {
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(6L, 12L, 4L)
   x[2L, ] <- 3                            # constant -> identical half means
-  out <- cier_personal_reliability(x, it, resample = FALSE)
+  out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
   expect_true(is.na(out$value[[2L]]))
   expect_false(is.na(out$value[[1L]]))
 })
@@ -422,7 +449,7 @@ test_that("an all-NA row abstains and keeps the remaining rows aligned (PR)", {
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(10L, 12L, 4L)
   x[5L, ] <- NA
-  out <- cier_personal_reliability(x, it, resample = FALSE)
+  out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
   expect_true(is.na(out$value[[5L]]))
   expect_true(is.na(out$flagged[[5L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -485,7 +512,7 @@ test_that("an absolute cutoff overrides the percentile and flags via the upper t
 test_that("a respondent exactly at the cutoff is flagged (>= ties, not >)", {
   it <- blocked_items(5L, 4L, reverse_keyed = FALSE)
   x <- rand_matrix(30L, 20L, 7L)
-  v <- cier_personal_reliability(x, it, resample = FALSE)$value
+  v <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))$value
   k <- which.max(v)
   out <- cier_personal_reliability(x, it, resample = FALSE, cutoff = v[[k]])
   expect_true(out$flagged[[k]])
@@ -592,16 +619,21 @@ test_that("n_resamples and seed are validated even on the PR path", {
 test_that("print renders the locked cli summary (deterministic PR)", {
   withr::with_options(list(cli.width = 80, cli.unicode = FALSE), {
     it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
-    x <- rand_matrix(11L, 12L, 6L)
-    expect_snapshot(print(cier_personal_reliability(x, it, resample = FALSE)))
+    # WP3: 24 rows keep the percentile cutoff resolvable (>= 20 scored, D2), so
+    # the snapshot locks the resolved-cutoff summary format; suppressWarnings keeps
+    # the saturation note out of the captured print.
+    x <- rand_matrix(24L, 12L, 6L)
+    out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
+    expect_snapshot(print(out))
   })
 })
 
 test_that("print reports abstaining respondents on their own line (PR)", {
   withr::with_options(list(cli.width = 80, cli.unicode = FALSE), {
     it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
-    x <- rbind(rand_matrix(11L, 12L, 6L), rep(NA_real_, 12L))
-    expect_snapshot(print(cier_personal_reliability(x, it, resample = FALSE)))
+    x <- rbind(rand_matrix(24L, 12L, 6L), rep(NA_real_, 12L))
+    out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
+    expect_snapshot(print(out))
   })
 })
 
@@ -613,7 +645,7 @@ test_that("a complete straightliner abstains as '(no score)', not '(no responses
   # reason-neutral '(no score)' is the honest wording the print must use.
   it <- blocked_items(3L, 4L, reverse_keyed = FALSE)
   x  <- rbind(rand_matrix(11L, 12L, 6L), rep(3, 12L))  # row 12: complete straightliner
-  out <- cier_personal_reliability(x, it, resample = FALSE)
+  out <- suppressWarnings(cier_personal_reliability(x, it, resample = FALSE))
   expect_true(is.na(out$value[12L]))                   # abstains (unscalable)
   expect_false(anyNA(x[12L, ]))                         # yet has no missing data
   printed <- withr::with_options(

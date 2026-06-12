@@ -34,8 +34,9 @@
 #' **Cutoff.** The default flags the lowest-correlation respondents: the cutoff is
 #' the empirical `fpr` quantile of the observed scores (the 5th percentile by
 #' default) and respondents at or below it are flagged. This is a **ranking**
-#' convention -- a sample percentile flags `fpr` of respondents by construction --
-#' not a calibrated false-positive rate. Adjust the target tail with `fpr`, or
+#' convention -- a sample percentile flags **at least** `fpr` of respondents (more
+#' when scores tie at the cutoff) -- not a calibrated false-positive rate. Adjust
+#' the target tail with `fpr`, or
 #' pass an absolute `cutoff` in `[-1, 1]` to flag on a literal correlation
 #' threshold (e.g. one carried over from a calibration sample). `fpr` and `cutoff`
 #' are mutually exclusive.

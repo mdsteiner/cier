@@ -35,8 +35,9 @@
 #' **Cutoff.** The default flags the highest-inconsistency respondents: the cutoff
 #' is the empirical `1 - fpr` quantile of the observed scores (the 95th percentile
 #' by default) and respondents at or above it are flagged. This is a **ranking**
-#' convention -- a sample percentile flags `fpr` of respondents by construction --
-#' not a calibrated false-positive rate. Adjust the target tail with `fpr`, or
+#' convention -- a sample percentile flags **at least** `fpr` of respondents (more
+#' when scores tie at the cutoff) -- not a calibrated false-positive rate. Adjust
+#' the target tail with `fpr`, or
 #' pass an absolute `cutoff` in `[-1, 1]` to flag on a literal score threshold
 #' (e.g. one carried over from a calibration sample). `fpr` and `cutoff` are
 #' mutually exclusive.

@@ -32,8 +32,9 @@
 #' **Cutoff.** The default flags the most predictable respondents: the cutoff is
 #' the empirical upper `fpr` quantile of the observed scores (the 95th percentile
 #' by default) -- the convention Biemann et al.'s own studies use, where they
-#' flag the top 5%. This is cier's single-`fpr`-knob **ranking** convention, not
-#' a calibrated false-positive rate. Override it with **one** of three mutually
+#' flag the top 5%. This is cier's single-`fpr`-knob **ranking** convention -- it
+#' flags **at least** `fpr` of respondents (more when scores tie at the cutoff),
+#' not a calibrated false-positive rate. Override it with **one** of three mutually
 #' exclusive arguments:
 #' - `fpr`, a different target upper-tail mass for the percentile;
 #' - `kneedle = TRUE`, the sample-specific **Kneedle elbow** (Satopaa et al.,

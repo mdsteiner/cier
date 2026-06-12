@@ -448,16 +448,55 @@ sweep `fpr` across {0.01, 0.05, 0.10}. The flag comparator (`>=` / `<=`) is
 applied separately, by `apply_flag()`.
 
 `resolve_cutoff()` returns a bare numeric scalar (`NA_real_`, with a typed
-`cier_warning_insufficient_items`, when a percentile cutoff cannot be resolved
-because no finite values remain). It builds no object: the index wrapper already
+`cier_warning_insufficient_items`, when a percentile cutoff cannot be resolved --
+see the degeneracy guards below). It builds no object: the index wrapper already
 knows its method and direction from its registry row and attaches them to the
 light `cier_index`.
 
+## Percentile cutoff degeneracy guards (D1/D2/D7, release review 2026-06-12)
+
+The empirical-percentile resolver had no degeneracy guard: a constant score
+distribution (every consistent respondent scoring the same) flagged **100%** at
+any `fpr`, `n = 1` flagged the only respondent on a perfect score, and a tie mass
+at the cutoff (e.g. even-odd's point mass at the Spearman-Brown ceiling `+1`) drove
+the realised rate well past the target with no signal. `resolve_percentile_cutoff()`
+now applies three guards, in order, mirroring the abstain-on-degeneracy convention
+the kneedle resolver already uses:
+
+- **D2 (small-sample abstain).** A `p`-tail cutoff is meaningless until at least
+  `ceiling(1 / fpr)` finite scores exist (20 at the default `fpr = 0.05`). Fewer
+  abstains: `NA` cutoff + `cier_warning_insufficient_items`, flagging nobody. This
+  subsumes the former no-finite-values branch. `ceiling(round(1 / fpr, 9))` guards
+  the exact-reciprocal float edge (the same idiom as `resolve_fixed_cutoff`).
+- **D1 (flags-everyone abstain).** If the resolved cutoff would flag every scored
+  respondent (`upper`: `cutoff <= min`; `lower`: `cutoff >= max` -- the
+  effectively-constant distribution), abstain (same warning class) rather than
+  flag 100% silently.
+- **D7 (saturation warn -- resolve, do not abstain).** If the cutoff sits exactly
+  on the score extreme but not every value ties there (`upper`: `cutoff == max`;
+  `lower`: `cutoff == min` -- a partial tie mass), the realised rate exceeds `fpr`.
+  Emit a new typed warning `cier_warning_saturated_cutoff` and still return the
+  finite cutoff. The exact order-statistic equality holds iff a tie mass reaches the
+  cutoff (a type-7 quantile interpolates strictly inside the range otherwise), so no
+  tolerance is needed.
+
+The order D2 -> D1 -> D7 makes the three mutually exclusive. `cier_screen()` muffles
+**both** `cier_warning_insufficient_items` and `cier_warning_saturated_cutoff` at its
+index call (the screen already prints each per-index flag rate, and even-odd's point
+mass would otherwise fire D7 on essentially every Likert screen); a direct
+`cier_<index>()` call still warns, which is where the ranking-convention caveat is
+wanted. The median-relative (`resolve_median_cutoff`) and kneedle resolvers are
+unchanged (median-anchored / already abstaining). The pinned constant/single-value
+test at `test-cutoff.R` changed from returning the constant to abstaining -- a
+deliberate change recorded in `TOLERANCES.md`. The docs' "flags `fpr` by
+construction" wording was corrected package-wide to "flags **at least** `fpr`; more
+when scores tie at the cutoff".
+
 ## Agreement diagnostic: observed co-occurrence vs a Poisson-binomial null
 
-Because an empirical-percentile cutoff flags its target rate by construction, the
-per-index flag rate is tautological and is never presented as a false-positive
-rate. The informative quantity is cross-index agreement: `flag_agreement()`
+Because an empirical-percentile cutoff flags at least its target rate by
+construction (more when scores tie at the cutoff), the per-index flag rate is
+tautological and is never presented as a false-positive rate. The informative quantity is cross-index agreement: `flag_agreement()`
 reports, for each level k, the observed share of respondents flagged by at least
 k votes against the share expected if the votes fired independently. That
 expectation is the exact upper tail of the **Poisson-binomial** distribution of

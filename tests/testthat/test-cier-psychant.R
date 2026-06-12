@@ -98,7 +98,10 @@ test_that("cier_psychant returns a list-based cier_index with the pinned schema"
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_psychant(ant_matrix(n = 12L)))
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  df <- as.data.frame(suppressWarnings(cier_psychant(ant_matrix(n = 12L))))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 12L)
@@ -125,8 +128,8 @@ test_that("cier_psychant$value equals the oracle when rows carry NAs", {
 test_that("cier_psychant$value equals the hand-computed fixture exactly", {
   # Pair set is the three orthogonally-separated antonym pairs; every non-constant
   # respondent scores exactly -1, the all-constant row abstains (NA).
-  expect_equal(cier_psychant(hand_fixture())$value, c(NA, -1, -1, -1),
-               tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_psychant(hand_fixture()))$value,
+               c(NA, -1, -1, -1), tolerance = 1e-12)
 })
 
 # ---- Cross-package parity: careless (anto = TRUE, 1e-12) --------------------
@@ -217,7 +220,7 @@ test_that("a straightliner (zero-variance pair side) abstains, not a resampled v
   # permutation value instead; we require NA.
   x <- ant_matrix(n = 20L, seed = 5L)
   x[2L, ] <- 0                      # midpoint straightliner (zero variance both sides)
-  out <- cier_psychant(x)
+  out <- suppressWarnings(cier_psychant(x))
   expect_true(is.na(out$value[[2L]]))
   expect_false(is.na(out$value[[1L]]))
 })
@@ -264,7 +267,7 @@ test_that("the no-pairs warning is the tailored antonym one, raised once", {
 test_that("a respondent with fewer than three complete pairs abstains; rows stay aligned", {
   x <- ant_matrix(n = 12L, seed = 3L)
   x[5L, c(2L, 3L, 4L, 6L, 7L, 8L)] <- NA   # leaves only pair (5,1) complete -> abstains
-  out <- cier_psychant(x)
+  out <- suppressWarnings(cier_psychant(x))
   expect_true(is.na(out$value[[5L]]))
   expect_true(is.na(out$flagged[[5L]]))
   expect_false(is.na(out$value[[1L]]))

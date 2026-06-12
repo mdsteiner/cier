@@ -75,7 +75,10 @@ test_that("cier_psychsyn returns a list-based cier_index with the pinned schema"
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_psychsyn(syn_matrix(n = 12L)))
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  df <- as.data.frame(suppressWarnings(cier_psychsyn(syn_matrix(n = 12L))))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 12L)
@@ -102,8 +105,8 @@ test_that("cier_psychsyn$value equals the oracle when rows carry NAs", {
 test_that("cier_psychsyn$value equals the hand-computed fixture exactly", {
   # Pair set is the three orthogonally-separated synonym pairs; every non-constant
   # respondent scores exactly +1, the all-constant row abstains (NA).
-  expect_equal(cier_psychsyn(hand_fixture())$value, c(NA, 1, 1, 1),
-               tolerance = 1e-12)
+  expect_equal(suppressWarnings(cier_psychsyn(hand_fixture()))$value,
+               c(NA, 1, 1, 1), tolerance = 1e-12)
 })
 
 # ---- Cross-package parity: careless::psychsyn (bytewise) --------------------
@@ -203,7 +206,7 @@ test_that("a straightliner (zero-variance pair side) abstains, not a resampled v
   # permutation value instead; we require NA.
   x <- syn_matrix(n = 20L, seed = 5L)
   x[2L, ] <- 3                      # constant straightliner
-  out <- cier_psychsyn(x)
+  out <- suppressWarnings(cier_psychsyn(x))
   expect_true(is.na(out$value[[2L]]))
   expect_false(is.na(out$value[[1L]]))
 })
@@ -218,7 +221,10 @@ test_that("a NON-INTEGER straightliner abstains exactly, with no leaked warning 
   # (masked min == max), so every constant abstains regardless of which way the
   # cancellation fell.
   for (const in c(2.597092, 1.663422, 0.3, 0.05)) {
-    x <- syn_matrix(n = 20L, seed = 5L)
+    # 25 rows keeps the percentile cutoff resolvable (>= 20 scored, D2), so
+    # expect_no_warning isolates the kernel's silence on the constant pair side
+    # -- the property under test -- from the cutoff layer.
+    x <- syn_matrix(n = 25L, seed = 5L)
     x[2L, ] <- const                 # constant DECIMAL straightliner
     expect_no_warning(out <- cier_psychsyn(x))
     expect_true(is.na(out$value[[2L]]))
@@ -284,7 +290,7 @@ test_that("the no-pairs warning is the tailored one: cause, remedy, and ONE warn
 test_that("a respondent with fewer than three complete pairs abstains; rows stay aligned", {
   x <- syn_matrix(n = 12L, seed = 3L)
   x[5L, 1L:8L] <- NA                # leaves too few complete pairs -> abstains
-  out <- cier_psychsyn(x)
+  out <- suppressWarnings(cier_psychsyn(x))
   expect_true(is.na(out$value[[5L]]))
   expect_true(is.na(out$flagged[[5L]]))
   expect_false(is.na(out$value[[1L]]))

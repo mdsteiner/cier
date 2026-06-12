@@ -106,7 +106,9 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #'
 #' **Interpreting and reporting.** The percentile cutoff is a **ranking
 #' convention**, not a calibrated false-positive rate: it cuts a tail of the size
-#' you choose (`fpr`) and flags about that share of *this* sample by construction.
+#' you choose (`fpr`) and flags **at least** that share of *this* sample -- more
+#' when scores tie at the cutoff (e.g. even-odd's point mass at the consistency
+#' ceiling flags roughly 10% of the bundled Likert sample at `fpr = 0.05`).
 #' It is **not** Goldammer et al.'s simulated-null Sen95 operating point and makes
 #' no claim about the true false-positive rate. Treat the exclusion as a
 #' researcher decision: **report results before and after** removing flagged

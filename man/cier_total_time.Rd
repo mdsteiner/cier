@@ -49,8 +49,9 @@ duration (\code{NA}) abstains.
 \strong{Cutoff.} The default flags the fastest respondents: the cutoff is the
 empirical lower \code{fpr} quantile of the observed times (the 5th percentile by
 default), and respondents at or below it are flagged. This is a \strong{ranking}
-convention -- a sample percentile flags \code{fpr} of respondents by construction --
-not a calibrated false-positive rate. Override it with \strong{one} of three
+convention -- a sample percentile flags \strong{at least} \code{fpr} of respondents (more
+when scores tie at the cutoff) -- not a calibrated false-positive rate. Override
+it with \strong{one} of three
 mutually exclusive arguments:
 \itemize{
 \item \code{fpr}, a different target tail mass for the percentile;

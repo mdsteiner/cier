@@ -166,10 +166,15 @@ screen_call_index <- function(method, responses, items, args) {
   # broad inventory) raises `cier_warning_insufficient_items` from its standalone
   # cutoff resolution, but the screen already reports that case transparently in
   # `$flags` / `print` as "0 / 0", so re-emitting it as a warning is redundant
-  # noise that would fire on every broad-inventory screen. Muffle ONLY that one
-  # typed condition (a targeted handler, NOT a blanket suppressWarnings -- e.g. a
-  # singular-covariance warning still propagates), and only around the screen's
-  # own call; a direct `cier_<index>()` call still warns.
+  # noise that would fire on every broad-inventory screen. The same holds for
+  # `cier_warning_saturated_cutoff` (a percentile cutoff sitting on a tie mass at
+  # the score extreme, so the realised rate exceeds fpr): the screen already
+  # prints the per-index flag rate, so the saturation note is redundant here --
+  # and even-odd's point mass at +1 would otherwise fire it on essentially every
+  # Likert screen. Muffle ONLY those two typed conditions (a targeted handler,
+  # NOT a blanket suppressWarnings -- e.g. a singular-covariance warning still
+  # propagates), and only around the screen's own call; a direct `cier_<index>()`
+  # call still warns, which is where the ranking-convention caveat is wanted.
   #
   # A typed BACKEND LIMIT on otherwise-valid data (cier_error_backend_limit, e.g.
   # mokken's 10-category ceiling for cier_ht) must not abort the battery: catch
@@ -179,7 +184,8 @@ screen_call_index <- function(method, responses, items, args) {
   tryCatch(
     withCallingHandlers(
       do.call(method, c(base, args)),
-      cier_warning_insufficient_items = function(w) invokeRestart("muffleWarning")
+      cier_warning_insufficient_items = function(w) invokeRestart("muffleWarning"),
+      cier_warning_saturated_cutoff = function(w) invokeRestart("muffleWarning")
     ),
     cier_error_backend_limit = function(e) {
       reason <- cier_condition_data(e)$reason

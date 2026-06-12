@@ -29,7 +29,10 @@ spread_seconds <- function(n = 30L, seed = 11L) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_total_time returns a list-based cier_index with the schema", {
-  out <- cier_total_time(small_seconds())
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  out <- suppressWarnings(cier_total_time(small_seconds()))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -44,7 +47,7 @@ test_that("cier_total_time returns a list-based cier_index with the schema", {
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_total_time(small_seconds()))
+  df <- as.data.frame(suppressWarnings(cier_total_time(small_seconds())))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 5L)
@@ -62,19 +65,24 @@ test_that("the value is the seconds vector verbatim (no transform)", {
 
 test_that("an integer seconds vector is coerced to double, values unchanged", {
   x <- c(40L, 80L, 120L, 160L)
-  out <- cier_total_time(x)
+  out <- suppressWarnings(cier_total_time(x))
   expect_type(out$value, "double")
   expect_identical(out$value, as.numeric(x))
 })
 
-test_that("a single respondent scores (no minimum-n floor)", {
-  # total_time needs no pair / second item the way IRV and Laz.R do, so one
-  # finite value is a valid score; the percentile cutoff over one value is that
-  # value. Pins that a spurious n < 2 abstention guard was not added.
-  out <- cier_total_time(120)
+test_that("a single respondent scores, but the percentile cutoff abstains (D2)", {
+  # total_time needs no pair / second item the way IRV and Laz.R do, so one finite
+  # value is a valid SCORE (no n < 2 abstention on the value itself). The
+  # percentile CUTOFF, however, needs >= 20 scored respondents (D2), so over a
+  # single value it abstains rather than flagging the respondent against itself.
+  expect_warning(out <- cier_total_time(120),
+                 class = "cier_warning_insufficient_items")
   expect_identical(out$value, 120)
-  expect_false(is.na(out$cutoff))
-  expect_equal(out$cutoff, 120, tolerance = 1e-12)
+  expect_identical(out$cutoff, NA_real_)
+  expect_false(out$flagged[[1L]])
+  # The median-relative override is not a tail percentile, so it still resolves on
+  # a single value (the D2 floor is specific to the percentile resolver).
+  expect_identical(cier_total_time(120, frac_median = 0.5)$cutoff, 60)
 })
 
 # ---- Cutoff: percentile default, fpr override, NO-FLIP -----------------------
@@ -190,7 +198,7 @@ test_that("an NA row abstains and keeps rows aligned", {
   # The abstainer sits in the middle, so value and flagged must stay aligned to
   # their respondents.
   x <- c(40, NA, 120)
-  out <- cier_total_time(x)
+  out <- suppressWarnings(cier_total_time(x))
   expect_true(is.na(out$value[[2L]]))
   expect_true(is.na(out$flagged[[2L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -254,7 +262,7 @@ test_that("a small-but-positive time is accepted and preserved", {
   # The boundary is strictly > 0, OPEN below: a sub-second time is valid, not an
   # "implausibly fast" input error. Kills a `value < 1` (minimum-plausible-time)
   # guard that would silently reject genuine fast respondents.
-  out <- expect_no_error(cier_total_time(c(0.001, 40, 120)))
+  out <- expect_no_error(suppressWarnings(cier_total_time(c(0.001, 40, 120))))
   expect_identical(out$value[[1L]], 0.001)
 })
 

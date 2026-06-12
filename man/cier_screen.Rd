@@ -113,7 +113,9 @@ percentile, hence \code{NA}).
 
 \strong{Interpreting and reporting.} The percentile cutoff is a \strong{ranking
 convention}, not a calibrated false-positive rate: it cuts a tail of the size
-you choose (\code{fpr}) and flags about that share of \emph{this} sample by construction.
+you choose (\code{fpr}) and flags \strong{at least} that share of \emph{this} sample -- more
+when scores tie at the cutoff (e.g. even-odd's point mass at the consistency
+ceiling flags roughly 10\% of the bundled Likert sample at \code{fpr = 0.05}).
 It is \strong{not} Goldammer et al.'s simulated-null Sen95 operating point and makes
 no claim about the true false-positive rate. Treat the exclusion as a
 researcher decision: \strong{report results before and after} removing flagged

@@ -52,8 +52,9 @@ not need to be declared.
 \strong{Cutoff.} The default flags the lowest-correlation respondents: the cutoff is
 the empirical \code{fpr} quantile of the observed scores (the 5th percentile by
 default) and respondents at or below it are flagged. This is a \strong{ranking}
-convention -- a sample percentile flags \code{fpr} of respondents by construction --
-not a calibrated false-positive rate. Adjust the target tail with \code{fpr}, or
+convention -- a sample percentile flags \strong{at least} \code{fpr} of respondents (more
+when scores tie at the cutoff) -- not a calibrated false-positive rate. Adjust
+the target tail with \code{fpr}, or
 pass an absolute \code{cutoff} in \verb{[-1, 1]} to flag on a literal correlation
 threshold (e.g. one carried over from a calibration sample). \code{fpr} and \code{cutoff}
 are mutually exclusive.

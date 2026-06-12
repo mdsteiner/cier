@@ -59,7 +59,8 @@ administration order -- there is no reverse-keying and no scale blocking.
 \details{
 \strong{Cutoff.} The default flags the most autocorrelated respondents: the cutoff
 is the empirical upper \code{fpr} quantile of the observed scores (the 95th
-percentile by default) and respondents at or above it are flagged. This
+percentile by default) and respondents at or above it are flagged -- \strong{at
+least} \code{fpr} of them, more when scores tie at the cutoff. This
 empirical-ranking convention is the paper's own recommendation ("rely on
 relative, not absolute criteria"). Adjust the target tail with \code{fpr}, or pass
 an absolute \code{cutoff} in \verb{[0, 1]} to flag on a literal autocorrelation

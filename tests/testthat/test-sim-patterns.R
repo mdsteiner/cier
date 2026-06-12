@@ -38,7 +38,10 @@ vit <- function(scale, max, min = NULL) {
 # A one-row careless-high score through an index, on a single response row -- one
 # finite value resolves the percentile cutoff, so no abstention warning fires.
 row_value <- function(index_fun, row, ...) {
-  index_fun(matrix(as.integer(row), nrow = 1L), ...)$value
+  # WP3: simulated fixtures can trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these recovery tests assert rank recovery, not flags, so the
+  # (correct) warning is muffled.
+  suppressWarnings(index_fun(matrix(as.integer(row), nrow = 1L), ...))$value
 }
 
 # Build a contaminated dataset end-to-end (Slice 24 attentive + Slice 25 plant)
@@ -651,7 +654,7 @@ test_that("each pattern is recovered by its matched index (rank-AUC floor)", {
   }), 0.85)
   expect_gt(local({
     d <- make_contaminated(12L, "diagonal")
-    ref_rank_auc(cier_lazr(d$responses)$value, d$truth$careless)
+    ref_rank_auc(suppressWarnings(cier_lazr(d$responses))$value, d$truth$careless)
   }), 0.85)
   expect_gt(local({
     d <- make_contaminated(13L, "markov")
@@ -662,7 +665,7 @@ test_that("each pattern is recovered by its matched index (rank-AUC floor)", {
     # high-lag slices whose |autocorrelation| saturates near 1 for attentive rows
     # too, eroding the seesaw's separation.
     d <- make_contaminated(14L, "alternating")
-    ref_rank_auc(cier_autocorrelation(d$responses, max_lag = 8L)$value,
+    ref_rank_auc(suppressWarnings(cier_autocorrelation(d$responses, max_lag = 8L))$value,
                  d$truth$careless)
   }), 0.85)
   expect_gt(local({

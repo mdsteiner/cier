@@ -44,7 +44,10 @@ pattern_fixture <- function(p = 30L) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_autocorrelation returns a list-based cier_index schema", {
-  out <- cier_autocorrelation(ac_fixture(n = 12L))
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  out <- suppressWarnings(cier_autocorrelation(ac_fixture(n = 12L)))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -59,7 +62,7 @@ test_that("cier_autocorrelation returns a list-based cier_index schema", {
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_autocorrelation(ac_fixture(n = 8L)))
+  df <- as.data.frame(suppressWarnings(cier_autocorrelation(ac_fixture(n = 8L))))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 8L)
@@ -111,7 +114,7 @@ test_that("na_rm = FALSE handles NAs pairwise, matching the oracle", {
     c(2, 4, 1, 5, 3, 1, 4, 2)
   )
   storage.mode(mat) <- "double"
-  expect_equal(cier_autocorrelation(mat)$value,
+  expect_equal(suppressWarnings(cier_autocorrelation(mat))$value,
                ref_autocorrelation_value(mat), tolerance = 1e-10)
 })
 
@@ -123,7 +126,7 @@ test_that("na_rm = TRUE strips per row before lagging, matching the oracle", {
   strip <- ref_autocorrelation_value(mat, na_rm = TRUE)[[1L]]
   pairwise <- ref_autocorrelation_value(mat, na_rm = FALSE)[[1L]]
   expect_false(isTRUE(all.equal(strip, pairwise)))     # the fixture is diagnostic
-  expect_equal(cier_autocorrelation(mat, na_rm = TRUE)$value[[1L]],
+  expect_equal(suppressWarnings(cier_autocorrelation(mat, na_rm = TRUE))$value[[1L]],
                strip, tolerance = 1e-10)
 })
 
@@ -140,11 +143,13 @@ test_that("scattered-NA rows match the oracle on both NA paths", {
     c(5, 4, 3, 2, 1, 2, 3, 4, 5, 4)
   )
   storage.mode(m) <- "double"
-  expect_equal(cier_autocorrelation(m, max_lag = 4L)$value,
+  expect_equal(suppressWarnings(cier_autocorrelation(m, max_lag = 4L))$value,
                ref_autocorrelation_value(m, max_lag = 4L), tolerance = 1e-10)
-  expect_equal(cier_autocorrelation(m, max_lag = 4L, na_rm = TRUE)$value,
-               ref_autocorrelation_value(m, max_lag = 4L, na_rm = TRUE),
-               tolerance = 1e-10)
+  expect_equal(
+    suppressWarnings(cier_autocorrelation(m, max_lag = 4L, na_rm = TRUE))$value,
+    ref_autocorrelation_value(m, max_lag = 4L, na_rm = TRUE),
+    tolerance = 1e-10
+  )
 })
 
 # ---- Cross-package parity: responsePatterns::rp.acors (1e-10, complete) -----
@@ -152,7 +157,7 @@ test_that("scattered-NA rows match the oracle on both NA paths", {
 test_that("cier_autocorrelation matches rp.acors on complete data (na_rm FALSE)", {
   skip_if_not_installed("responsePatterns")
   x <- ac_fixture(n = 20L, p = 30L, seed = 7L)
-  ours <- cier_autocorrelation(x)$value
+  ours <- suppressWarnings(cier_autocorrelation(x))$value
   rp <- suppressMessages(
     responsePatterns::rp.acors(as.data.frame(x), na.rm = FALSE)
   )
@@ -162,16 +167,21 @@ test_that("cier_autocorrelation matches rp.acors on complete data (na_rm FALSE)"
 
 # ---- Convention pins: zero-variance slice scores 1 (NOT abstention) ---------
 
-test_that("a straightliner scores exactly 1 and is flagged, never NA", {
-  out <- cier_autocorrelation(matrix(rep(3, 30L), nrow = 1L))
+test_that("a straightliner scores exactly 1 (zero-variance slice -> 1, never NA)", {
+  # The value convention: a zero-variance row has maximal autocorrelation 1, not
+  # NA. A lone respondent cannot resolve a percentile cutoff (D2), so it is not
+  # flagged here; flagging once the cutoff is resolvable is pinned by the
+  # direction test below.
+  expect_warning(out <- cier_autocorrelation(matrix(rep(3, 30L), nrow = 1L)),
+                 class = "cier_warning_insufficient_items")
   expect_identical(out$value, 1)
   expect_false(is.na(out$value))
-  expect_true(out$flagged[[1L]])
+  expect_false(out$flagged[[1L]])
 })
 
 test_that("seesaw and diagonal patterns score 1 (max |ac|)", {
   pf <- pattern_fixture(p = 30L)
-  v <- cier_autocorrelation(pf)$value
+  v <- suppressWarnings(cier_autocorrelation(pf))$value
   expect_identical(v[[1L]], 1)               # constant: zero-var branch, exact 1
   expect_equal(v[[2L]], 1, tolerance = 1e-10)  # seesaw 1,5,1,5,... (lag-2 cor 1)
   expect_equal(v[[3L]], 1, tolerance = 1e-10)  # diagonal 1..5 repeated (lag-5 cor 1)
@@ -196,7 +206,7 @@ test_that("na_rm = TRUE: a row stripping to < 3 elements abstains", {
     c(2, 4, rep(NA_real_, 8L))             # strips to 2 -> abstains
   )
   storage.mode(mat) <- "double"
-  out <- cier_autocorrelation(mat, na_rm = TRUE)
+  out <- suppressWarnings(cier_autocorrelation(mat, na_rm = TRUE))
   expect_true(is.na(out$value[[3L]]))
   expect_true(is.na(out$flagged[[3L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -209,7 +219,7 @@ test_that("an all-NA row abstains and keeps rows aligned", {
     c(5, 4, 3, 2, 1, 2, 3, 4, 5, 4)
   )
   storage.mode(mat) <- "double"
-  out <- cier_autocorrelation(mat)
+  out <- suppressWarnings(cier_autocorrelation(mat))
   expect_true(is.na(out$value[[2L]]))
   expect_true(is.na(out$flagged[[2L]]))
   expect_false(is.na(out$value[[1L]]))
@@ -230,7 +240,7 @@ test_that("a wholly abstaining matrix warns and flags nobody", {
 
 test_that("p = 4 works with the default max_lag (= 1) and matches the oracle", {
   x <- ac_fixture(n = 6L, p = 4L, seed = 3L)
-  out <- cier_autocorrelation(x)
+  out <- suppressWarnings(cier_autocorrelation(x))
   expect_s3_class(out, "cier_index")
   expect_identical(length(out$value), 6L)
   # The narrowest lag window (a single lag-1 slice over 4 columns) is value-
@@ -253,7 +263,8 @@ test_that("an unreconcilable lag range is a typed input error", {
   expect_error(cier_autocorrelation(x, max_lag = 8L),
                class = "cier_error_input")
   # ncol - 3 (= 7) is the largest ACCEPTED max_lag (guards a too-tight bound)
-  expect_s3_class(cier_autocorrelation(x, max_lag = 7L), "cier_index")
+  expect_s3_class(suppressWarnings(cier_autocorrelation(x, max_lag = 7L)),
+                  "cier_index")
 })
 
 test_that("bad min_lag / max_lag are typed input errors", {
@@ -295,7 +306,7 @@ test_that("direction is upper: high-ac rows flag, low ones do not", {
                                       nrow = 20L))
   x <- rbind(rep(3, 16L), rnd)            # constant row -> value 1 (the maximum)
   storage.mode(x) <- "double"
-  out <- cier_autocorrelation(x)
+  out <- suppressWarnings(cier_autocorrelation(x))
   expect_true(out$flagged[[1L]])                          # constant, value 1
   expect_false(out$flagged[[which.min(out$value)]])       # least autocorrelated
   expect_identical(out$flagged,

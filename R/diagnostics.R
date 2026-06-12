@@ -1,6 +1,7 @@
 # Purpose: The cross-index agreement diagnostic. A per-index empirical
-#          percentile flags exactly its target rate by construction, so that
-#          per-index rate is tautological and uninformative. What is
+#          percentile flags at least its target rate by construction (more when
+#          scores tie at the cutoff), so that per-index rate is tautological and
+#          uninformative. What is
 #          informative is whether flags cluster on the SAME respondents across
 #          votes -- the signature of a real careless subgroup. `flag_agreement()`
 #          contrasts the observed share flagged by >= k votes with the share

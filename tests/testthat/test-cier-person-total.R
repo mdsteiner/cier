@@ -51,7 +51,10 @@ ref_item_rest <- function(x) {
 # ---- Schema -----------------------------------------------------------------
 
 test_that("cier_person_total returns a list-based cier_index with the pinned schema", {
-  out <- cier_person_total(hand_fixture())
+  # WP3: small/saturated fixtures trip the percentile-cutoff degeneracy guard
+  # (D2/D7); these value/oracle tests assert the score, not the flag, so the
+  # (correct) warning is muffled.
+  out <- suppressWarnings(cier_person_total(hand_fixture()))
   expect_s3_class(out, "cier_index")
   expect_type(out, "list")
   expect_identical(names(out),
@@ -66,7 +69,7 @@ test_that("cier_person_total returns a list-based cier_index with the pinned sch
 })
 
 test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
-  df <- as.data.frame(cier_person_total(hand_fixture()))
+  df <- as.data.frame(suppressWarnings(cier_person_total(hand_fixture())))
   expect_s3_class(df, "data.frame")
   expect_identical(names(df), c("value", "flagged"))
   expect_identical(nrow(df), 4L)
@@ -76,7 +79,7 @@ test_that("as.data.frame.cier_index returns the tidy per-respondent frame", {
 # ---- Independent oracle parity (1e-12) --------------------------------------
 
 test_that("cier_person_total$value equals the hand-computed fixture exactly", {
-  expect_equal(cier_person_total(hand_fixture())$value,
+  expect_equal(suppressWarnings(cier_person_total(hand_fixture()))$value,
                c(1, 1, -1, 1), tolerance = 1e-12)
 })
 
@@ -123,9 +126,10 @@ test_that("the statistic is item-TOTAL, not item-rest (leave-one-out)", {
   # (here by ~0.66). We must match the item-total oracle to 1e-12 and be far from
   # the item-rest values; an item-rest mutant would invert both assertions.
   x <- rand_matrix(n = 5L, p = 6L, seed = 13L)
-  expect_equal(cier_person_total(x)$value, ref_person_total(x),
+  expect_equal(suppressWarnings(cier_person_total(x))$value, ref_person_total(x),
                tolerance = 1e-12)
-  expect_gt(max(abs(cier_person_total(x)$value - ref_item_rest(x))), 1e-6)
+  expect_gt(max(abs(suppressWarnings(cier_person_total(x))$value -
+                      ref_item_rest(x))), 1e-6)
 })
 
 test_that("the wrapper is matrix-only: no item-metadata channel exists", {
@@ -173,7 +177,7 @@ test_that("a respondent with exactly two answered items abstains; three scores",
   x <- rand_matrix(n = 6L, p = 10L, seed = 5L)
   x[1L, 3L:10L] <- NA        # 2 answered -> abstains
   x[2L, 4L:10L] <- NA        # 3 answered -> scored
-  out <- cier_person_total(x)
+  out <- suppressWarnings(cier_person_total(x))
   expect_true(is.na(out$value[[1L]]))
   expect_false(is.na(out$value[[2L]]))
 })
@@ -181,7 +185,7 @@ test_that("a respondent with exactly two answered items abstains; three scores",
 test_that("a constant (straightliner) row abstains (zero variance -> NA)", {
   x <- rand_matrix(n = 5L, p = 8L, seed = 4L)
   x[2L, ] <- 3               # constant straightliner -> zero variance
-  out <- cier_person_total(x)
+  out <- suppressWarnings(cier_person_total(x))
   expect_true(is.na(out$value[[2L]]))
   expect_false(is.na(out$value[[1L]]))
 })
@@ -198,7 +202,10 @@ test_that("a NON-INTEGER straightliner abstains exactly, with no leaked base-R w
   # tiny-positive at k = 12 under the old kernel; 0.3 and 0.05 are realistic
   # decimal codings.
   for (const in c(2.597092, 1.663422, 0.3, 0.05)) {
-    x <- rand_matrix(n = 6L, p = 12L, seed = 8L)
+    # 25 rows keeps the percentile cutoff resolvable (>= 20 scored, D2), so
+    # expect_no_warning isolates the kernel's silence on the constant row -- the
+    # property under test -- from the cutoff layer.
+    x <- rand_matrix(n = 25L, p = 12L, seed = 8L)
     x[1L, ] <- const
     expect_no_warning(out <- cier_person_total(x))
     expect_true(is.na(out$value[[1L]]))
@@ -235,7 +242,7 @@ test_that("an all-NA row abstains and keeps the remaining rows aligned", {
   # their respondents (row-indexing mutant guard).
   x <- rand_matrix(n = 10L, p = 8L, seed = 4L)
   x[5L, ] <- NA
-  out <- cier_person_total(x)
+  out <- suppressWarnings(cier_person_total(x))
   expect_true(is.na(out$value[[5L]]))
   expect_true(is.na(out$flagged[[5L]]))
   expect_false(is.na(out$value[[1L]]))

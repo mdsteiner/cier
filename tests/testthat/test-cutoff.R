@@ -123,9 +123,131 @@ test_that("percentile drops NaN/Inf before the quantile", {
   )
 })
 
-test_that("percentile handles a single finite value and constant input", {
-  expect_identical(resolve_cutoff(c(5, NA), "lower", fpr = 0.05), 5)
-  expect_identical(resolve_cutoff(rep(7, 10L), "upper", fpr = 0.05), 7)
+# ---- resolve_cutoff: degeneracy guards (D1 constant, D2 small-n, D7 saturation)
+# A percentile cutoff has no meaning on a degenerate distribution. Three guards,
+# applied in the order D2 -> D1 -> D7 so they are mutually exclusive. The kneedle
+# resolver (above) already abstains on the same degeneracy; these bring the
+# percentile path in line. The expectations here are re-derived by hand (the
+# threshold ceiling(1/fpr) and the quantile order statistics), never by calling
+# the resolver. See tests/reference/TOLERANCES.md.
+
+test_that("D2: percentile abstains below ceiling(1/fpr) finite scores", {
+  # The 5%-tail cutoff is undefined until at least ceiling(1/0.05) = 20 scores
+  # exist; 19 abstains, 20 resolves. (A single finite value flagging a perfect
+  # score -- the old behaviour -- is indefensible.)
+  expect_warning(res <- resolve_cutoff(as.numeric(1:19), "upper", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res, NA_real_)
+  # n = 20 clears the threshold and resolves to the hand-computed 95th percentile.
+  expect_identical(resolve_cutoff(as.numeric(1:20), "upper", fpr = 0.05),
+                   as.numeric(stats::quantile(1:20, 0.95, names = FALSE,
+                                              type = 7L)))      # = 19.05
+  # ...silently: the interior quantile must not trip the saturation warning.
+  expect_no_warning(resolve_cutoff(as.numeric(1:20), "upper", fpr = 0.05))
+  # The threshold scales with fpr: 1/0.10 -> 10, 1/0.01 -> 100. Both directions.
+  expect_warning(resolve_cutoff(as.numeric(1:9), "upper", fpr = 0.10),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(resolve_cutoff(as.numeric(1:10), "lower", fpr = 0.10),
+                   as.numeric(stats::quantile(1:10, 0.10, names = FALSE,
+                                              type = 7L)))
+  expect_warning(resolve_cutoff(as.numeric(1:99), "lower", fpr = 0.01),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(resolve_cutoff(as.numeric(1:100), "lower", fpr = 0.01),
+                   as.numeric(stats::quantile(1:100, 0.01, names = FALSE,
+                                              type = 7L)))
+})
+
+test_that("D2: the threshold is ceiling(1/fpr), not floor (non-integer reciprocal)", {
+  # fpr = 0.03 -> 1/fpr = 33.33..; ceiling = 34. n = 33 must abstain (a floor=33
+  # mutant would resolve it); n = 34 resolves. The {0.05, 0.10, 0.01} fixtures all
+  # have an integer reciprocal, so this is the only test that separates the two.
+  expect_warning(res <- resolve_cutoff(as.numeric(1:33), "upper", fpr = 0.03),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res, NA_real_)
+  expect_identical(resolve_cutoff(as.numeric(1:34), "upper", fpr = 0.03),
+                   as.numeric(stats::quantile(1:34, 0.97, names = FALSE,
+                                              type = 7L)))
+})
+
+test_that("D2 counts finite scores, not total length (NA padding does not lift it)", {
+  # 19 finite values padded with 10 NAs: total length 29 (>= 20) but the finite
+  # count is 19 (< 20). A mutant comparing length(values) to min_n would resolve;
+  # the spec counts finite scores only and abstains.
+  padded <- c(as.numeric(1:19), rep(NA_real_, 10L))
+  expect_warning(res <- resolve_cutoff(padded, "upper", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res, NA_real_)
+})
+
+test_that("D2: a single finite value (was 5/7) now abstains, both directions", {
+  # The pinned change from the pre-WP3 behaviour (this test deliberately replaces
+  # the old `-> 5` / `-> 7` pin; recorded in TOLERANCES.md). One finite value, or
+  # ten, is below the 20-score floor at fpr = 0.05.
+  expect_warning(res1 <- resolve_cutoff(c(5, NA), "lower", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res1, NA_real_)
+  expect_warning(res2 <- resolve_cutoff(rep(7, 10L), "upper", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(res2, NA_real_)
+})
+
+test_that("D1: a constant distribution abstains even above the small-n floor", {
+  # 25 finite values clears D2 (>= 20), so this isolates the constant guard: a
+  # high/low quantile of a constant equals that constant, so the cutoff would flag
+  # EVERY respondent (upper: cutoff <= min; lower: cutoff >= max). Abstain, do not
+  # flag 100%. Holds for both directions.
+  expect_warning(up <- resolve_cutoff(rep(7, 25L), "upper", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(up, NA_real_)
+  expect_warning(lo <- resolve_cutoff(rep(7, 25L), "lower", fpr = 0.05),
+                 class = "cier_warning_insufficient_items")
+  expect_identical(lo, NA_real_)
+})
+
+test_that("D1 fires as insufficient_items, never the saturation warning", {
+  # Ordering guard: a wholly-constant input is the all-tie case (D1), not a
+  # partial tie mass (D7). It must raise insufficient_items and abstain, NOT
+  # saturated_cutoff. (A D1/D7-swapped mutant would resolve + warn saturated.)
+  seen <- new.env()
+  seen$classes <- character(0)
+  withCallingHandlers(
+    res <- resolve_cutoff(rep(2, 30L), "upper", fpr = 0.05),
+    warning = function(w) {
+      seen$classes <- c(seen$classes, class(w))
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_identical(res, NA_real_)
+  expect_true("cier_warning_insufficient_items" %in% seen$classes)
+  expect_false("cier_warning_saturated_cutoff" %in% seen$classes)
+})
+
+test_that("D7: a partial tie mass at the extreme warns but resolves the cutoff", {
+  # Upper: 5 of 40 values tie at the maximum (100), > 5%, so the 95th percentile
+  # lands ON the max. The cutoff IS resolvable (finite), but flagging >= it flags
+  # the whole 12.5% tie mass -- more than fpr. Warn, do not abstain.
+  up_vals <- c(as.numeric(1:35), rep(100, 5L))                # n = 40
+  expect_warning(cut_up <- resolve_cutoff(up_vals, "upper", fpr = 0.05),
+                 class = "cier_warning_saturated_cutoff")
+  expect_identical(cut_up, 100)                               # == max, finite
+  expect_identical(cut_up,
+                   as.numeric(stats::quantile(up_vals, 0.95, names = FALSE,
+                                              type = 7L)))
+  # Lower mirror: 5 of 40 tie at the minimum (0); the 5th percentile lands on min.
+  lo_vals <- c(rep(0, 5L), as.numeric(1:35))                  # n = 40
+  expect_warning(cut_lo <- resolve_cutoff(lo_vals, "lower", fpr = 0.05),
+                 class = "cier_warning_saturated_cutoff")
+  expect_identical(cut_lo, 0)                                 # == min, finite
+})
+
+test_that("D7: healthy continuous data resolves silently (no saturation warning)", {
+  # Continuous scores with no tie at the extreme: the quantile interpolates
+  # strictly inside the range, so neither D1 nor D7 fires.
+  vals <- withr::with_seed(20260612L, stats::runif(60L))
+  expect_no_warning(out <- resolve_cutoff(vals, "upper", fpr = 0.05))
+  expect_false(is.na(out))
+  expect_gt(out, min(vals))
+  expect_lt(out, max(vals))
 })
 
 # ---- apply_flag --------------------------------------------------------------

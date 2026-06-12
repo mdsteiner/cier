@@ -15,7 +15,9 @@
 #     wrapper validates the user-supplied rate (`fpr` / `alpha` / `frac`) and
 #     literal `cutoff` before calling (early fail), and `method` / `direction`
 #     come from the registry, so no input re-checking happens here. The only
-#     condition raised below is the runtime percentile abstention.
+#     conditions raised below are the runtime percentile abstentions
+#     (cier_warning_insufficient_items) and the saturation diagnostic
+#     (cier_warning_saturated_cutoff, which warns but still resolves).
 #   - The percentile branch flips on direction exactly ONCE (upper -> the
 #     1 - fpr quantile, lower -> the fpr quantile). The registry stores each
 #     method's literal directional quantile, so it must never be fed back
@@ -27,21 +29,68 @@
 
 # Empirical-percentile cutoff at the target false-positive tail mass. Single
 # direction flip: upper flags the high tail (probs = 1 - fpr), lower flags the
-# low tail (probs = fpr). Non-finite values are dropped first; with none left
-# the cutoff abstains (NA + typed warning) rather than erroring.
+# low tail (probs = fpr). Non-finite values are dropped first, then three
+# degeneracy guards run -- the same abstain-on-degeneracy convention the kneedle
+# resolver above already applies (resolve_kneedle_cutoff()):
+#   D2 small-sample: a p-tail cutoff is meaningless until at least ceiling(1/fpr)
+#     finite scores exist (20 at the default fpr = 0.05), so fewer abstains
+#     (NA + cier_warning_insufficient_items). This subsumes the no-finite case.
+#   D1 flags-everyone: if the resolved cutoff would flag EVERY scored respondent
+#     (upper: cutoff <= min; lower: cutoff >= max -- the effectively-constant
+#     distribution) abstain, rather than silently flag 100%.
+#   D7 saturation: if the cutoff sits exactly on the score extreme but not every
+#     value ties there (a partial tie mass), the realised rate exceeds fpr; warn
+#     (cier_warning_saturated_cutoff) but still return the finite cutoff.
+# The order D2 -> D1 -> D7 makes the three mutually exclusive (constant -> D1;
+# tiny -> D2). The `>=` / `<=` flag comparator is applied later by apply_flag().
 resolve_percentile_cutoff <- function(values, direction, fpr, call) {
   finite <- values[is.finite(values)]
-  if (length(finite) == 0L) {
+  n_used <- length(finite)
+  # round() before ceiling() neutralises sub-1e-9 IEEE noise in 1 / fpr (the same
+  # idiom as resolve_fixed_cutoff()): a reciprocal that floats a hair above an
+  # integer is not pushed to the next integer by ceiling(). The common fprs are
+  # already exact (1 / 0.05 == 20, 1 / 0.01 == 100), so it is a no-op there.
+  min_n <- ceiling(round(1 / fpr, 9L))
+  if (n_used < min_n) {
     cier_warn(
       "cier_warning_insufficient_items",
-      c("Cannot resolve a percentile cutoff: no finite values remain.",
-        "i" = "Returning {.val NA} as the cutoff."),
-      data = list(n_used = 0L), call = call
+      c("Cannot resolve a percentile cutoff at fpr = {fpr}: only {n_used} \\
+         finite score{?s} (at least {min_n} are needed for a {fpr} tail).",
+        "i" = "Returning {.val NA} as the cutoff; no respondent is flagged."),
+      data = list(n_used = n_used, n_required = min_n, fpr = fpr), call = call
     )
     return(NA_real_)
   }
-  probs <- if (identical(direction, "upper")) 1 - fpr else fpr
-  as.numeric(stats::quantile(finite, probs = probs, names = FALSE, type = 7L))
+  upper <- identical(direction, "upper")
+  probs <- if (upper) 1 - fpr else fpr
+  cutoff <- as.numeric(stats::quantile(finite, probs = probs, names = FALSE,
+                                       type = 7L))
+  flags_all <- if (upper) cutoff <= min(finite) else cutoff >= max(finite)
+  if (flags_all) {
+    cier_warn(
+      "cier_warning_insufficient_items",
+      c("Cannot resolve a percentile cutoff: the scores are effectively \\
+         constant, so every scored respondent would be flagged.",
+        "i" = "Returning {.val NA} as the cutoff; no respondent is flagged."),
+      data = list(n_used = n_used), call = call
+    )
+    return(NA_real_)
+  }
+  on_extreme <- if (upper) cutoff == max(finite) else cutoff == min(finite)
+  if (on_extreme) {
+    extreme <- if (upper) "maximum" else "minimum"
+    cier_warn(
+      "cier_warning_saturated_cutoff",
+      c("The percentile cutoff ({.val {cutoff}}) equals the score {extreme}; \\
+         a tie mass at the cutoff flags more than fpr = {fpr} of respondents.",
+        "i" = "Ties at the cutoff can substantially exceed the target tail \\
+               (the documented ranking convention). Inspect the realised flag \\
+               rate, or set an explicit {.arg cutoff}."),
+      data = list(cutoff = cutoff, fpr = fpr, direction = direction),
+      call = call
+    )
+  }
+  cutoff
 }
 
 # Median-relative cutoff for the timing family: flag respondents faster than a

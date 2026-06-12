@@ -19,6 +19,18 @@ slices (2-11).
 | Fixed cutoff (verbatim passthrough of the resolved value) | 0 (identical) | -- |
 | Agreement diagnostic Poisson-binomial tail vs. enumeration oracle | 1e-12 | `ref-poisson-binomial-enumeration.R` |
 
+**Percentile-cutoff degeneracy guards (release review 2026-06-12).** The percentile
+resolver now abstains (`NA` + `cier_warning_insufficient_items`) below
+`ceiling(1 / fpr)` finite scores (D2) and on a constant distribution that would flag
+everyone (D1), and warns (`cier_warning_saturated_cutoff`, still resolving) when the
+cutoff sits on a partial tie mass at the score extreme (D7). On non-degenerate data
+the cutoff is unchanged, so the "Percentile cutoff vs. `stats::quantile`" row above
+still holds at tolerance 0. The previously pinned constant / single-value cases in
+`tests/testthat/test-cutoff.R` (`resolve_cutoff(c(5, NA), "lower")` returned `5`;
+`resolve_cutoff(rep(7, 10), "upper")` returned `7`) now **abstain** -- a deliberate
+behaviour change, not a loosened tolerance (see `ADR.md`, "Percentile cutoff
+degeneracy guards (D1/D2/D7)").
+
 ## Per-index parity (slices 2-11)
 
 One row per statistic, added when its slice lands. Each index has an independent

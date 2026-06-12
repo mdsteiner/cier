@@ -52,7 +52,8 @@ resolve_autocorrelation_lags <- function(min_lag, max_lag, n_items, call) {
 #' @details
 #' **Cutoff.** The default flags the most autocorrelated respondents: the cutoff
 #' is the empirical upper `fpr` quantile of the observed scores (the 95th
-#' percentile by default) and respondents at or above it are flagged. This
+#' percentile by default) and respondents at or above it are flagged -- **at
+#' least** `fpr` of them, more when scores tie at the cutoff. This
 #' empirical-ranking convention is the paper's own recommendation ("rely on
 #' relative, not absolute criteria"). Adjust the target tail with `fpr`, or pass
 #' an absolute `cutoff` in `[0, 1]` to flag on a literal autocorrelation

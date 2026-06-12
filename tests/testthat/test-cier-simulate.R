@@ -431,7 +431,10 @@ test_that("each planted pattern is recovered by its matched index end-to-end", {
   }), 0.85)
   expect_gt(local({
     s <- rec(12L, "diagonal")
-    ref_rank_auc(cier_lazr(s$responses)$value, s$truth$careless)
+    # WP3: simulated fixtures can trip the percentile-cutoff degeneracy guard
+    # (D2/D7); these recovery tests assert rank recovery, not flags, so the
+    # (correct) warning is muffled.
+    ref_rank_auc(suppressWarnings(cier_lazr(s$responses))$value, s$truth$careless)
   }), 0.85)
   expect_gt(local({
     # supplementary coarse floor; the deterministic honoured-transition test in
@@ -441,7 +444,7 @@ test_that("each planted pattern is recovered by its matched index end-to-end", {
   }), 0.75)
   expect_gt(local({
     s <- rec(14L, "alternating")
-    ref_rank_auc(cier_autocorrelation(s$responses, max_lag = 8L)$value,
+    ref_rank_auc(suppressWarnings(cier_autocorrelation(s$responses, max_lag = 8L))$value,
                  s$truth$careless)
   }), 0.85)
   expect_gt(local({
