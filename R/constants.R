@@ -27,3 +27,11 @@ cier_cutoff_methods <- function() {
 cier_flag_directions <- function() {
   c("upper", "lower")
 }
+
+# Latent trait distributions the simulation engine (cier_simulate) draws from.
+# One source of truth so the public-boundary check, the kernel dispatch, and a
+# future cier_simulate() argument pin against the same set; element [1] is the
+# documented default.
+sim_trait_distributions <- function() {
+  c("normal", "skew_normal", "t", "bimodal")
+}
