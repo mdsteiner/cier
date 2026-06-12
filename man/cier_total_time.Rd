@@ -99,7 +99,7 @@ cier_total_time(secs, frac_median = 0.5)
 }
 \references{
 Ward, M. K., & Meade, A. W. (2023). Dealing with careless responding in survey
-data. \emph{Annual Review of Psychology}, 74, 577-606.
+data. \emph{Annual Review of Psychology}, 74, 577-596.
 \doi{10.1146/annurev-psych-040422-045007}
 
 Huang, J. L., Curran, P. G., Keeney, J., Poposki, E. M., & DeShon, R. P.

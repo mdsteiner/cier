@@ -163,9 +163,10 @@ load_method_registry <- function() {
 #' - `paper_year`, `paper_citation_key`, `doi`: the source paper the default is
 #'   traced to.
 #' - `default_cutoff_method` / `default_cutoff_value`: how the default cutoff is
-#'   resolved (`"percentile"` at a target tail mass, `"fixed"` fraction,
-#'   `"chisq"` tail probability, or `"perfit_null"` Monte-Carlo level) and the
-#'   cited default rate.
+#'   resolved (`"percentile"` at a target tail mass; `"fixed"` -- a fraction of the
+#'   item count for longstring, a literal count for the page-time and attention
+#'   indices; `"chisq"` tail probability; or `"perfit_null"` Monte-Carlo level) and
+#'   the cited default value.
 #' - `flag_direction`: which tail flags carelessness (`"upper"` / `"lower"`).
 #' - `companion_methods`: indices commonly paired with this one.
 #' - `backend`: the `Suggests` package that scores the statistic (`NA` for the

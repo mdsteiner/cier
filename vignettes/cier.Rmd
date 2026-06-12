@@ -307,7 +307,7 @@ Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis
 (2024). Careless responding detection revisited: Accuracy of direct and indirect
 measures. *Behavior Research Methods, 56*(8), 8422-8449.
 
-Gottfried, J., Ježek, S., & Králová, M. (2022). Autocorrelation screening: A
+Gottfried, J., Ježek, S., Králová, M., & Řiháček, T. (2022). Autocorrelation screening: A
 potentially efficient method for detecting repetitive response patterns in
 questionnaire data. *Practical Assessment, Research & Evaluation, 27*, Article 2.
 

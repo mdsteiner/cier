@@ -85,7 +85,7 @@
 #'
 #' @references
 #' Ward, M. K., & Meade, A. W. (2023). Dealing with careless responding in survey
-#' data. *Annual Review of Psychology*, 74, 577-606.
+#' data. *Annual Review of Psychology*, 74, 577-596.
 #' \doi{10.1146/annurev-psych-040422-045007}
 #'
 #' Huang, J. L., Curran, P. G., Keeney, J., Poposki, E. M., & DeShon, R. P.

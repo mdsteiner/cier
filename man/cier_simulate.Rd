@@ -217,10 +217,9 @@ Curran, P. G. (2016). Methods for the detection of carelessly invalid
 responses in survey data. \emph{Journal of Experimental Social Psychology}, 66,
 4-19. \doi{10.1016/j.jesp.2015.07.006}
 
-Goldammer, P., Annen, H., Stockli, P. L., & Jonas, K. (2024). On the
-utility of indirect methods for detecting faking and careless responding:
-A comparison under experimentally induced and naturally occurring
-conditions. \emph{Behavior Research Methods}, 56(8), 8422-8449.
+Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., &
+Antonakis, J. (2024). Careless responding detection revisited: Accuracy of
+direct and indirect measures. \emph{Behavior Research Methods}, 56(8), 8422-8449.
 \doi{10.3758/s13428-024-02484-3}
 
 Huang, J. L., Curran, P. G., Keeney, J., Poposki, E. M., & DeShon, R. P.

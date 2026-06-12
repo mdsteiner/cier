@@ -299,7 +299,7 @@ insufficient effort responding to surveys. *Organizational Research Methods,
 Curran, P. G. (2016). Methods for the detection of carelessly invalid responses
 in survey data. *Journal of Experimental Social Psychology, 66*, 4-19.
 
-Goldammer, P., Stockli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis,
+Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis,
 J. (2024). Careless responding detection revisited: Accuracy of direct and
 indirect measures. *Behavior Research Methods, 56*(8), 8422-8449.
 

@@ -144,8 +144,8 @@ new_cier_screen <- function(indices, flags, vote_group, votes, agreement,
 #' responses in survey data. *Journal of Experimental Social Psychology*, 66,
 #' 4-19. \doi{10.1016/j.jesp.2015.07.006}
 #'
-#' Goldammer P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., &
-#' Antonakis, J. (2024) Careless responding detection revisited: Accuracy of
+#' Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., &
+#' Antonakis, J. (2024). Careless responding detection revisited: Accuracy of
 #' direct and indirect measures. *Behavior Research Methods*, 56, 8422-8449.
 #'
 #' Meade, A. W., & Craig, S. B. (2012). Identifying careless responses in survey

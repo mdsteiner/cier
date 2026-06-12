@@ -27,9 +27,10 @@ accessor is read-only. Columns:
 \item \code{paper_year}, \code{paper_citation_key}, \code{doi}: the source paper the default is
 traced to.
 \item \code{default_cutoff_method} / \code{default_cutoff_value}: how the default cutoff is
-resolved (\code{"percentile"} at a target tail mass, \code{"fixed"} fraction,
-\code{"chisq"} tail probability, or \code{"perfit_null"} Monte-Carlo level) and the
-cited default rate.
+resolved (\code{"percentile"} at a target tail mass; \code{"fixed"} -- a fraction of the
+item count for longstring, a literal count for the page-time and attention
+indices; \code{"chisq"} tail probability; or \code{"perfit_null"} Monte-Carlo level) and
+the cited default value.
 \item \code{flag_direction}: which tail flags carelessness (\code{"upper"} / \code{"lower"}).
 \item \code{companion_methods}: indices commonly paired with this one.
 \item \code{backend}: the \code{Suggests} package that scores the statistic (\code{NA} for the

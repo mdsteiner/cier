@@ -125,12 +125,12 @@ null** row: no model-conforming null exists for the mokken-backed polytomous
 statistic, so its cutoff is the empirical lower-tail percentile (`stats::quantile`,
 already covered by the slice-1 cutoff rows).
 
-## v0.2 index additions (stubs -- the test rows land with each wrapper slice)
+## v0.2 index additions
 
-The five v0.2 indices register their parity contract here ahead of
-implementation; the active rows + tests arrive with each index's wrapper.
-`responsePatterns` joins `Suggests` for the autocorrelation parity only; the
-other four are oracle-only (no CRAN package computes them), like PR / RPR.
+The five v0.2 indices register their parity contracts here; each row's active
+tests live with the index's wrapper. `responsePatterns` joins `Suggests` for the
+autocorrelation parity only; the other four are oracle-only (no CRAN package
+computes them), like PR / RPR.
 
 | Index | Quantity | Target tolerance | Reference |
 |---|---|---:|---|
