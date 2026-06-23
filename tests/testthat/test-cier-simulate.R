@@ -29,10 +29,14 @@ it10 <- sim_items_df(rep(c("E", "A"), each = 5L))           # 10 items, 2 scales
 it20 <- sim_items_df(rep(c("E", "A"), each = 10L))          # the recovery battery
 
 # Text-serialised digest of the simulator output (the frozen-RNG-stream fixture):
-# full-precision %g for doubles, locale-free, no platform EOL translation -- the
-# published-results digest mechanism.
+# %g at 7 significant digits, locale-free, no platform EOL translation. 7 (not 17)
+# is deliberate: the continuous response times come from exp() of the RNG draws, and
+# exp()'s last bits differ across CPU architectures (Apple aarch64 vs x86 libm), so a
+# 17-digit digest is not portable. 7 digits sits ~8 orders of magnitude above that
+# last-bit noise yet far below a genuinely different draw (which moves the value
+# wholesale), so it stays portable AND still catches any added/removed/reordered draw.
 sim_digest <- function(sim) {
-  fmt <- function(x) formatC(as.vector(x), format = "g", digits = 17)
+  fmt <- function(x) formatC(as.vector(x), format = "g", digits = 7)
   key <- c(fmt(sim$responses), fmt(sim$seconds), fmt(sim$page_seconds),
            as.character(sim$items_per_page),
            if (!is.null(sim$checks)) fmt(sim$checks),
@@ -363,7 +367,7 @@ test_that("the frozen-seed RNG-stream digest is stable", {
                      prevalence = 0.5, prop_partial = 0.5,
                      prop_temporary = 0.25, n_checks = 2L,
                      seed = 20260612L)
-  expect_identical(sim_digest(s), "f74d7aff4eb107521d27bc05f25d8d33")
+  expect_identical(sim_digest(s), "a911927b19826e9ede79880757a022e3")
 })
 
 # ---- Marginals / trait threading --------------------------------------------
