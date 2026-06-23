@@ -1,0 +1,107 @@
+# R CMD check on a lean cross-OS matrix (Ubuntu, Windows, macOS; R release)
+# plus a dedicated job on the declared `Depends: R (>= 4.4)` floor, and a
+# separate Ubuntu job that runs the full test suite -- including the
+# statistical slow tier -- against the source tree. The source-tree run is
+# needed because the in-suite gates (no-process-vocabulary, roxygen-up-to-date,
+# references-DOI) and the snapshot tests skip under `R CMD check`: there the
+# suite runs against the installed package, where the development sources they
+# inspect are not on disk.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+name: R-CMD-check
+
+permissions: read-all
+
+jobs:
+  R-CMD-check:
+    runs-on: ${{ matrix.config.os }}
+
+    name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {os: ubuntu-latest,  r: 'release'}
+          - {os: windows-latest, r: 'release'}
+          - {os: macos-latest,   r: 'release'}
+          # Exercise the declared `Depends: R (>= 4.4)` floor: a clean R CMD
+          # check on the lowest supported R, not just the current release. If
+          # this job fails, raise the floor to the lowest version that passes.
+          - {os: ubuntu-latest,  r: '4.4'}
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.config.r }}
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          upload-snapshots: true
+          build_args: 'c("--no-manual")'
+          args: 'c("--no-manual")'
+
+  tests-and-guards:
+    runs-on: ubuntu-latest
+
+    # Name kept stable: a branch-protection required status check may key on it.
+    # This job also runs the statistical slow tier (see CIER_SLOW_TESTS below).
+    name: tests + in-suite gates (source tree)
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      # Run the skip_on_cran() guards and snapshot tests against the source.
+      NOT_CRAN: true
+      # Fail loudly (test-parity-partners.R) if a cross-package parity partner
+      # (careless / psych / PerFit / mokken) did not install: the parity layer
+      # must not silently skip in CI.
+      CIER_REQUIRE_PARITY: true
+      # Run the statistical slow tier (skip_if_slow): the GRM marginal-frequency
+      # oracle, the non-normal trait checks, the timing-calibration acceptance
+      # bands, the direct-injection rate checks, and the published-results
+      # recompute -- the actual recovery / faithfulness evidence, which otherwise
+      # runs only on the author's machine. Network-fetched published-results
+      # cases skip cleanly (never fail) when an upstream file is unfetchable or
+      # has changed.
+      CIER_SLOW_TESTS: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Pin roxygen2 to the recorded RoxygenNote so the roxygen-up-to-date
+          # guard runs instead of self-skipping on a version mismatch.
+          extra-packages: |
+            any::devtools
+            roxygen2@8.0.0
+          needs: check
+
+      - name: Run the test suite against the source tree
+        run: Rscript -e 'devtools::test(stop_on_failure = TRUE)'

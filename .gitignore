@@ -1,0 +1,26 @@
+# R session / project
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# build artifacts
+/*.Rcheck/
+*.tar.gz
+src/*.o
+src/*.so
+src/*.dll
+
+# coverage
+*.gcov
+*.gcda
+*.gcno
+/cobertura.xml
+tests/testthat/_snaps/*.new.md
+
+# local-only Claude Code settings (the agents/ definitions ARE tracked)
+.claude/settings.local.json
+
+# local development notes
+dev/

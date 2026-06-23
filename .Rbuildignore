@@ -1,0 +1,15 @@
+^data-raw$
+^dev$
+^man-roxygen$
+^\.claude$
+^\.lintr$
+^\.github$
+^codecov\.yml$
+^README\.Rmd$
+^vignettes/.*\.Rmd\.orig$
+^LICENSE\.md$
+^\.Rproj\.user$
+^.*\.Rproj$
+^\.git$
+^\.gitignore$
+^\.gitattributes$

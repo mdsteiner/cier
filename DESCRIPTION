@@ -1,0 +1,47 @@
+Package: cier
+Title: Detect Careless and Insufficient Effort Responding in Survey Data
+Version: 0.1.0
+Authors@R:
+    person("Markus", "Steiner", , "markus.d.steiner@gmail.com",
+           role = c("aut", "cre", "cph"))
+Description: A lean, fast toolkit for detecting careless and insufficient
+    effort responding ('C/IER') in survey data using indirect
+    response-pattern indices (longstring, intra-individual response
+    variability, personal reliability, psychometric synonyms and antonyms,
+    Mahalanobis distance, person-total correlation, nonparametric
+    person-fit statistics, and the sequence indices autocorrelation and
+    'Laz.R'), following the indirect-index battery evaluated by Goldammer
+    et al. (2024) <doi:10.3758/s13428-024-02484-3>, plus survey-timing
+    indices (total and per-page completion time) and a direct
+    attention-check index. Flags respondents through an auditable flagging
+    layer with a user-set target flag rate and transparent, citable
+    defaults.
+License: MIT + file LICENSE
+URL: https://github.com/mdsteiner/cier
+BugReports: https://github.com/mdsteiner/cier/issues
+Encoding: UTF-8
+LazyData: true
+Language: en-US
+Depends:
+    R (>= 4.4)
+Imports:
+    checkmate,
+    cli,
+    matrixStats,
+    rlang,
+    stats,
+    utils
+Suggests:
+    careless,
+    knitr,
+    mokken (>= 3.1.2),
+    PerFit (>= 1.4.7),
+    psych,
+    responsePatterns,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    withr
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0

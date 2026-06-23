@@ -1,0 +1,357 @@
+---
+title: "Simulation studies with cier"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Simulation studies with cier}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(cier)
+```
+
+## What `cier_simulate()` is for -- and what it is not
+
+`cier_simulate()` plants known careless responding into a survey dataset: it
+generates attentive responses from a graded response model, then overwrites a
+known share of respondents with a known pattern, extent, and onset, and adds
+matching response times and optional attention checks. Because the truth is
+planted, you can score any index against it. That makes the simulator useful for
+
+1. **Power analysis and study design** -- given your `n`, scales, and expected
+   contamination, what sensitivity can you expect?
+2. **Method comparison on planted patterns** -- which index catches which kind
+   of careless responder, on data you control?
+3. **Package recovery and property tests** -- "plant pattern X, check that the
+   matched index ranks it to the top".
+4. **Replicating published simulation designs.**
+
+It is **not** evidence of real-world validity. Simulated carelessness is more
+stylized than even instructed carelessness, and the warning is concrete:
+Schroeders et al. (2022) trained a detector on simulated data and found its
+advantage did **not** transfer to real respondents. So treat every number in
+this vignette as a statement about *this synthetic data*, and anchor any
+real-world accuracy claim to labelled real data instead (see
+`vignette("published-results")`). No simulated number belongs in a headline
+accuracy table.
+
+## A simulated dataset
+
+The generator needs an `items` frame describing the battery: which `scale` each
+item loads on (this defines the factor structure), whether it is
+`reverse_keyed`, and the response range (`max`, plus `min` when the scale is not
+1-based). Here are three eight-item scales on a 5-point format, every other item
+reverse-keyed:
+
+```{r}
+items <- data.frame(
+  scale         = rep(c("E", "A", "C"), each = 8L),
+  reverse_keyed = rep(c(FALSE, TRUE), times = 12L),
+  max           = 5L
+)
+
+sim <- cier_simulate(
+  n          = 200L,
+  items      = items,
+  prevalence = 0.2,
+  n_checks   = 2L,
+  seed       = 2026L
+)
+sim
+```
+
+The print-out is derived from the planted truth: a fifth of respondents are
+careless, split across the eight recognized patterns (the default weights them
+equally), all with `full` extent here. The role-boundary reminder is the last
+line, by design.
+
+The returned object is a plain list whose slots each feed a shipped function
+directly:
+
+```{r}
+str(sim, max.level = 1, give.attr = FALSE)
+```
+
+`$truth` carries one row per respondent -- the flag, the pattern (`"attentive"`
+on clean rows), the extent, the careless span (`onset_item` / `offset_item`),
+and the per-row generator knobs in `$params`:
+
+```{r}
+head(sim$truth[, c("careless", "pattern", "extent", "onset_item",
+                   "offset_item", "speeded")], 6)
+```
+
+### Tuning a pattern
+
+Each careless style has its own knobs, passed through `pattern_params` and
+recorded verbatim in `truth$params`. An unknown knob name is an error, so a typo
+cannot silently plant a default. For example, hold every straightliner on the
+maximum response and flip it occasionally:
+
+```{r}
+tuned <- cier_simulate(
+  n = 50L, items = items, prevalence = 0.4,
+  patterns       = c(straightline = 1),
+  pattern_params = list(straightline = list(anchor = "value", value = 5L,
+                                            switch_prob = 0.1)),
+  seed = 7L
+)
+tuned$truth$params[tuned$truth$careless][[1]]   # the knobs the engine applied
+```
+
+## Scoring the content battery
+
+`cier_screen()` runs the response-pattern battery over `sim$responses`, reusing
+`sim$items` exactly as a real analysis would:
+
+```{r}
+screen <- cier_screen(sim$responses, sim$items,
+  control = list(cier_personal_reliability = list(seed = 1),
+                 cier_gnormed = list(seed = 1)))
+screen
+```
+
+Two things to read here. First, even-odd and personal reliability measure one
+construct, so the ten indices collapse to nine votes -- the agreement block and
+the construct count run on the collapsed votes, never the raw per-index flags.
+Second, `cier_psychsyn` / `cier_psychant` abstain (`0 / 0`): with default
+loadings of 0.7, two items on the same scale correlate about 0.49, below the
+0.60 pairing threshold, so there are no synonym or antonym pairs to score --
+exactly as on a real battery whose scales are not near-redundant.
+
+The signal lives in **agreement**, so extract respondents by how many constructs
+flagged them, then score that against the planted truth. Because the cutoff is a
+ranking convention, treating *every* non-attentive pattern as "should exclude"
+makes the sensitivity below a lower bound -- a `speeder` has attentive content
+and is invisible to this battery on purpose (the next section catches it):
+
+```{r}
+truth <- sim$truth$careless
+sens_spec <- function(flagged) {
+  c(sensitivity = sum(truth & flagged) / max(sum(truth), 1L),
+    specificity = sum(!truth & !flagged) / max(sum(!truth), 1L))
+}
+
+n <- nrow(sim$responses)
+for (k in 1:3) {
+  pred <- seq_len(n) %in% cier_flagged_cases(screen, min_votes = k)
+  cat(sprintf("min_votes >= %d:  ", k))
+  print(round(sens_spec(pred), 3))
+}
+```
+
+Requiring more votes trades sensitivity for specificity -- the researcher's
+threshold, made visible.
+
+## Timing and attention checks
+
+The timing and direct indices are standalone -- they read the slots
+`cier_simulate()` produced, not the response matrix:
+
+```{r}
+cier_total_time(sim$seconds)
+cier_page_time(sim$page_seconds, sim$items_per_page)
+cier_attention(sim$checks, sim$pass)
+```
+
+Nothing here separates the groups perfectly: response times are drawn with a
+per-respondent pace intercept so the attentive and careless distributions
+overlap, and checks fail probabilistically on both sides. A rank-based AUC makes
+that concrete. The package exports no AUC helper -- it is a one-liner, with a
+direction argument because some indices flag *low* scores (fast total time)
+and some flag *high* ones (failed checks). For a comparison table, keep the
+direction map beside the methods you score:
+
+```{r}
+rank_auc <- function(value, careless, higher_is_careless = TRUE) {
+  ok <- !is.na(value)
+  v <- value[ok]; y <- careless[ok]
+  if (!higher_is_careless) v <- -v
+  n1 <- sum(y); n0 <- sum(!y)
+  if (n1 == 0L || n0 == 0L) return(NA_real_)
+  (sum(rank(v)[y]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+
+flag_direction <- c(
+  cier_longstring = "upper",
+  cier_autocorrelation = "upper",
+  cier_mahalanobis = "upper",
+  cier_lazr = "upper",
+  cier_total_time = "lower",
+  cier_attention = "upper"
+)
+
+# TRUE when HIGH scores flag carelessness.
+flag_is_upper <- function(method) {
+  identical(flag_direction[[method]], "upper")
+}
+
+c(total_time = rank_auc(cier_total_time(sim$seconds)$value, truth,
+                        flag_is_upper("cier_total_time")),
+  attention  = rank_auc(cier_attention(sim$checks, sim$pass)$value, truth,
+                        flag_is_upper("cier_attention")))
+```
+
+Total time lands inside the .66--.92 range reported across real datasets
+(Goldammer et al., 2024), never at 1.0 -- a simulator on which everything scores
+perfectly would be wrong by construction.
+
+### The speeder split
+
+A `speeder` is the case timing exists for: attentive *content*, careless
+*times*. The content battery should miss it, and timing should catch it. Among
+the planted speeders:
+
+```{r}
+speeder  <- sim$truth$pattern == "speeder"
+longstr  <- cier_longstring(sim$responses)$flagged
+pagetime <- cier_page_time(sim$page_seconds, sim$items_per_page)$flagged
+
+c(speeders          = sum(speeder),
+  caught_by_content = sum(longstr[speeder]),
+  caught_by_pages   = sum(pagetime[speeder], na.rm = TRUE))
+```
+
+The content index flags none of them; per-page timing catches several. This is
+why timing is converging evidence the screen cannot supply on its own -- and why
+a real screen should pair content indices with the platform's timestamps.
+
+## Method comparison: which index catches which pattern
+
+To see each index on its home turf, plant *one* pattern at a time and score the
+matched index. This reuses the `rank_auc()` helper above:
+
+```{r}
+one_pattern <- function(pattern, seed) {
+  weights <- stats::setNames(rep(0, 8L),
+    c("random", "straightline", "midpoint", "extreme",
+      "diagonal", "alternating", "markov", "speeder"))
+  weights[pattern] <- 1
+  cier_simulate(n = 200L, items, prevalence = 0.25,
+                patterns = weights, seed = seed)
+}
+
+cases <- data.frame(
+  pattern = c("straightline", "alternating", "random", "diagonal", "speeder"),
+  index   = c("longstring", "autocorrelation", "mahalanobis", "lazr",
+              "total_time"),
+  seed    = 11:15
+)
+cases$hi <- vapply(paste0("cier_", cases$index), flag_is_upper, logical(1L))
+
+score_one <- function(sim, index, hi) {
+  value <- switch(index,
+    longstring      = cier_longstring(sim$responses)$value,
+    autocorrelation = cier_autocorrelation(sim$responses, max_lag = 8L)$value,
+    mahalanobis     = cier_mahalanobis(sim$responses)$value,
+    lazr            = cier_lazr(sim$responses)$value,
+    total_time      = cier_total_time(sim$seconds)$value)
+  rank_auc(value, sim$truth$careless, higher_is_careless = hi)
+}
+
+cases$auc <- mapply(function(p, i, s, h) score_one(one_pattern(p, s), i, h),
+                    cases$pattern, cases$index, cases$seed, cases$hi)
+cases[, c("pattern", "index", "auc")]
+```
+
+The pattern-matched indices recover their target pattern almost perfectly, and
+the `speeder` row again shows timing carrying the signal that content cannot --
+score that same speeder data with a content index and the AUC drops to chance:
+
+```{r}
+speed_sim <- one_pattern("speeder", 15L)
+c(timing  = rank_auc(cier_total_time(speed_sim$seconds)$value,
+                     speed_sim$truth$careless, flag_is_upper("cier_total_time")),
+  content = rank_auc(cier_longstring(speed_sim$responses)$value,
+                     speed_sim$truth$careless, flag_is_upper("cier_longstring")))
+```
+
+One caveat for fair method comparison: by default every careless row also speeds
+(`prop_speeded = 1`), so timing's edge over the content indices is partly built
+in. Lower `prop_speeded` to leave that share of the *content*-careless rows at
+attentive pace -- "slow careless" respondents who answer carelessly but
+unhurriedly, whom timing should now miss:
+
+```{r}
+slow <- cier_simulate(n = 200L, items = items, prevalence = 0.25,
+                      patterns = c(straightline = 1), prop_speeded = 0,
+                      seed = 17L)
+mean(slow$truth$speeded)   # 0: careless content, but attentive response times
+```
+
+No single index is a detector. The lesson the simulator makes visible is the
+same one the screen is built on: different indices specialize in different
+patterns, so detection comes from running them together and reading their
+agreement.
+
+## Power analysis with replications
+
+Repeating a simulate-and-score run over many seeds turns a single accuracy
+number into a sampling distribution. A short loop keeps this vignette inside the
+build's timing budget; in practice you would run hundreds, possibly under
+`future::plan(multisession)`, and may restrict `methods =` to the indices you
+care about:
+
+```{r}
+replicate_one <- function(seed) {
+  s <- cier_simulate(n = 150L, items, prevalence = 0.2,
+                     patterns = c(random = 0.5, straightline = 0.5),
+                     seed = seed)
+  scr <- cier_screen(s$responses, s$items,
+    control = list(cier_personal_reliability = list(seed = 1),
+                   cier_gnormed = list(seed = 1)))
+  pred <- seq_len(nrow(s$responses)) %in% cier_flagged_cases(scr, min_votes = 2)
+  c(sensitivity = sum(s$truth$careless & pred) / max(sum(s$truth$careless), 1L),
+    specificity = sum(!s$truth$careless & !pred) /
+      max(sum(!s$truth$careless), 1L))
+}
+
+res <- vapply(101:105, replicate_one, numeric(2))
+round(res, 3)
+round(rowMeans(res), 3)
+```
+
+Sweep `prevalence`, `n`, the `patterns` mix, or `fpr` (through `control`) across
+such a loop to map the operating characteristics of a design before collecting
+any data.
+
+## What simulation can and cannot tell you
+
+The simulator is honest about its own limits, and so should its user be:
+
+- **It can** rank methods on a controlled pattern, localize where each index's
+  power comes from, size a study, and reproduce a published design. The patterns
+  here are clean, so pattern-matched indices look strong -- *on these patterns*.
+- **It cannot** stand in for real-world accuracy. Real careless responding is
+  messier and less separable than any planted pattern; Schroeders et al. (2022)
+  showed a simulation-trained advantage failing to transfer. Keep every
+  real-world accuracy claim anchored to labelled data
+  (`vignette("published-results")`), and report simulated results in their own
+  clearly-labelled section -- never folded into a real-data league table.
+
+Used that way -- as a design and comparison tool, not a validity claim -- the
+simulator answers questions no labelled dataset can, because only here is the
+truth known exactly.
+
+## References
+
+Bowling, N. A., Huang, J. L., Brower, C. K., & Bragg, C. B. (2023). The quick
+and the careless: The construct validity of page time as a measure of
+insufficient effort responding to surveys. *Organizational Research Methods,
+26*(2), 323-352.
+
+Curran, P. G. (2016). Methods for the detection of carelessly invalid responses
+in survey data. *Journal of Experimental Social Psychology, 66*, 4-19.
+
+Goldammer, P., Stöckli, P. L., Escher, Y. A., Annen, H., Jonas, K., & Antonakis,
+J. (2024). Careless responding detection revisited: Accuracy of direct and
+indirect measures. *Behavior Research Methods, 56*(8), 8422-8449.
+
+Schroeders, U., Schmidt, C., & Gnambs, T. (2022). Detecting careless responding
+in survey data using stochastic gradient boosting. *Educational and
+Psychological Measurement, 82*(1), 29-56.
+
+Welz, M., & Alfons, A. (2023). When respondents don't care anymore: Identifying
+the onset of careless responding. *arXiv:2303.07167*.

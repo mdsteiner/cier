@@ -1,0 +1,21 @@
+The cier package is released under the MIT licence (see the LICENSE and
+LICENSE.md files), which covers all original package code.
+
+The package additionally BUNDLES one third-party dataset, used as the example
+dataset for the help-page examples and the getting-started vignette, under a
+different licence:
+
+  data/bfi_careless.rda
+    Copyright (c) 2020 Florian Brühlmann, Serge Petralito, Lena F. Aeschbach,
+    and Klaus Opwis.
+    Licensed under the Creative Commons Attribution 4.0 International licence
+    (CC BY 4.0; https://creativecommons.org/licenses/by/4.0/).
+    Source: Brühlmann, F., Petralito, S., Aeschbach, L. F., & Opwis, K. (2020),
+    "The quality of data collected online: An investigation of careless
+    responding in a crowdsourced sample", Methods in Psychology, 2, 100022,
+    https://doi.org/10.1016/j.metip.2020.100022 ;
+    data component: https://osf.io/9vjur/ .
+    Changes: only the 44 BFI-44 items and two attention-check indicators were
+    retained, and the data was saved as a lazy-loaded R data object; no
+    response, validity-indicator, or timing value was altered. See
+    data-raw/bruhlmann-2020-data-quality-SOURCE.md for the full provenance.
